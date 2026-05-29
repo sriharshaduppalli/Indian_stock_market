@@ -9,7 +9,9 @@ Indian stock market data, analysis, prompts, queries, and LLM model scaffold.
     - Covers general Indian stock market, NSE/BSE/SEBI context, stock analysis, market calculations, and prediction intents
   - Domain knowledge retrieval
   - Grounded response composition with source citations
+  - Production-style response metadata (confidence, citations, disclaimer, safety flag)
   - Prediction-intent path with live-impact factor guidance
+  - Deterministic calculation support for common return/CAGR prompts
   - Daily continual-learning feedback hook
   - Fast latency mode configuration
 
@@ -25,6 +27,10 @@ Indian stock market data, analysis, prompts, queries, and LLM model scaffold.
 3. Ask a query:
    ```bash
    PYTHONPATH=src python -m indian_stock_llm.cli "What are valuation risks in Indian IT stocks?"
+   ```
+4. API-friendly JSON output:
+   ```bash
+   PYTHONPATH=src python -m indian_stock_llm.cli --json "Predict NIFTY next week"
    ```
 
 ## Next steps for production-grade accuracy

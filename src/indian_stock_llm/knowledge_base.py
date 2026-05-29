@@ -43,6 +43,9 @@ def _tokenize(text: str) -> set[str]:
 class KnowledgeBase:
     def __init__(self, items: Iterable[KnowledgeItem]):
         self.items = list(items)
+        self._item_tokens = [
+            _tokenize(f"{item.title} {item.content} {' '.join(item.tags)}") for item in self.items
+        ]
 
     @classmethod
     def from_json(cls, path: Path) -> KnowledgeBase:
@@ -53,8 +56,8 @@ class KnowledgeBase:
     def search(self, query: str, top_k: int = 3, min_score: float = 1.0) -> list[KnowledgeItem]:
         query_tokens = _tokenize(query)
         scored = []
-        for item in self.items:
-            score = len(query_tokens & _tokenize(f"{item.title} {item.content} {' '.join(item.tags)}"))
+        for item, item_tokens in zip(self.items, self._item_tokens):
+            score = len(query_tokens & item_tokens)
             if score >= min_score:
                 scored.append((score, item))
 

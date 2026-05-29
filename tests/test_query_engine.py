@@ -61,3 +61,49 @@ def test_stock_analysis_intent(tmp_path: Path) -> None:
 
     assert response.intent == "stock_analysis"
     assert "Relevant market context" in response.answer
+
+
+def test_calculation_query_has_deterministic_result(tmp_path: Path) -> None:
+    assistant = _assistant_with_repo_kb(tmp_path)
+    response = assistant.ask("Calculate CAGR for start 100 end 133.1 over 3 years")
+
+    assert response.intent == "market_calculations"
+    assert "Deterministic calculation: CAGR is" in response.answer
+    assert response.confidence > 0.0
+    assert response.citations
+
+
+def test_calculation_query_requires_valid_inputs(tmp_path: Path) -> None:
+    assistant = _assistant_with_repo_kb(tmp_path)
+    response = assistant.ask("Calculate CAGR from start 100 end 133 over 0 years")
+
+    assert response.intent == "market_calculations"
+    assert "Deterministic calculation unavailable" in response.answer
+
+
+def test_return_calculation_rejects_negative_sell_value(tmp_path: Path) -> None:
+    assistant = _assistant_with_repo_kb(tmp_path)
+    response = assistant.ask("Calculate return from buy 100 sell -50")
+
+    assert response.intent == "market_calculations"
+    assert "Deterministic calculation unavailable" in response.answer
+
+
+def test_prediction_contains_policy_disclaimer(tmp_path: Path) -> None:
+    assistant = _assistant_with_repo_kb(tmp_path)
+    response = assistant.ask("Predict next week outlook for NSE banking stocks")
+
+    assert response.intent == "prediction"
+    assert "not investment advice" in response.disclaimer
+    assert response.safe_for_trading_advice is False
+
+
+def test_query_method_returns_api_schema(tmp_path: Path) -> None:
+    assistant = _assistant_with_repo_kb(tmp_path)
+    payload = assistant.query("What is SEBI role in Indian stock market?")
+
+    assert payload["intent"] in {"general_query", "events_news", "fundamentals"}
+    assert isinstance(payload["answer"], str)
+    assert isinstance(payload["confidence"], float)
+    assert isinstance(payload["citations"], list)
+    assert "disclaimer" in payload
