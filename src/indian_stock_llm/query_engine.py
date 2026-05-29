@@ -147,6 +147,7 @@ class StockMarketAssistant:
             top_k=self.config.top_k_context,
             min_score=self.config.min_retrieval_score,
             metadata_filters=metadata_filters,
+            intent=intent,
         )
 
         if context_items:
