@@ -10,7 +10,7 @@ class AssistantConfig:
 
     knowledge_base_path: Path
     top_k_context: int = 3
-    min_retrieval_score: float = 0.1
+    min_retrieval_score: float = 1.0
     feedback_log_path: Path | None = None
     latency_mode: str = "fast"
 

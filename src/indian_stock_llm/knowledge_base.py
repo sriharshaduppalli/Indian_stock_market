@@ -50,7 +50,7 @@ class KnowledgeBase:
         items = [KnowledgeItem(**item) for item in data]
         return cls(items)
 
-    def search(self, query: str, top_k: int = 3, min_score: float = 2.0) -> list[KnowledgeItem]:
+    def search(self, query: str, top_k: int = 3, min_score: float = 1.0) -> list[KnowledgeItem]:
         query_tokens = _tokenize(query)
         scored = []
         for item in self.items:
