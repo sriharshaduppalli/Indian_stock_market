@@ -53,11 +53,33 @@ class KnowledgeBase:
         items = [KnowledgeItem(**item) for item in data]
         return cls(items)
 
-    def search(self, query: str, top_k: int = 3, min_score: float = 1.0) -> list[KnowledgeItem]:
+    def _semantic_score(self, query_tokens: set[str], item_tokens: set[str]) -> float:
+        if not query_tokens or not item_tokens:
+            return 0.0
+        overlap = len(query_tokens & item_tokens)
+        union = len(query_tokens | item_tokens)
+        return overlap / union if union else 0.0
+
+    def search(
+        self,
+        query: str,
+        top_k: int = 3,
+        min_score: float = 0.2,
+        metadata_filters: dict[str, str] | None = None,
+    ) -> list[KnowledgeItem]:
         query_tokens = _tokenize(query)
         scored = []
         for item, item_tokens in zip(self.items, self._item_tokens):
-            score = len(query_tokens & item_tokens)
+            if metadata_filters:
+                source_filter = metadata_filters.get("source")
+                tag_filter = metadata_filters.get("tag")
+                if source_filter and item.source != source_filter:
+                    continue
+                if tag_filter and tag_filter not in item.tags:
+                    continue
+            keyword_score = len(query_tokens & item_tokens)
+            semantic_score = self._semantic_score(query_tokens, item_tokens)
+            score = keyword_score + semantic_score
             if score >= min_score:
                 scored.append((score, item))
 

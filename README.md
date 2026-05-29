@@ -6,12 +6,19 @@ Indian stock market data, analysis, prompts, queries, and LLM model scaffold.
 - High-level architecture in `ARCHITECTURE.md`
 - Initial local assistant scaffold for Indian stock market Q&A:
   - Intent classification
-    - Covers general Indian stock market, NSE/BSE/SEBI context, stock analysis, market calculations, and prediction intents
+    - Covers general Indian stock market, NSE/BSE/SEBI context, stock analysis, market calculations, and prediction guidance intents
   - Domain knowledge retrieval
+    - Hybrid retrieval (keyword + semantic overlap) with metadata filtering
+    - ISIN/company-level symbol/entity resolution via enterprise instrument master
   - Grounded response composition with source citations
   - Production-style response metadata (confidence, citations, disclaimer, safety flag)
   - Prediction-intent path with live-impact factor guidance
   - Deterministic calculation support for common return/CAGR prompts
+  - SEBI-aligned safety checks, prompt-injection defenses, and policy audit logs
+  - Enterprise data layer scaffold with source hierarchy, validation, refresh, and lineage metadata
+  - Android-ready chat serving scaffold (stable contract, cache, rate-limit, retries, circuit-breaker, fallback)
+  - Evaluation release-gate scaffold for factuality, groundedness, hallucination, routing, and safety metrics
+  - Versioned release registry + rollback target helper
   - Daily continual-learning feedback hook
   - Fast latency mode configuration
 
@@ -34,8 +41,8 @@ Indian stock market data, analysis, prompts, queries, and LLM model scaffold.
    ```
 
 ## Next steps for production-grade accuracy
-- Integrate live NSE/BSE + filings/news pipelines
-- Add vector retrieval + reranking
-- Fine-tune a base LLM with Indian market instruction data
-- Add robust evaluation benchmark and guardrails
-- Add automated daily retraining jobs and latency SLO dashboards
+- Replace scaffold feeds with live NSE/BSE + filings/news connectors
+- Upgrade semantic retrieval to embedding + reranking stack
+- Fine-tune base LLM with broader Indian market supervision data
+- Integrate offline+online evaluation for continuous improvement rollouts
+- Connect serving metrics/traces to production monitoring backends

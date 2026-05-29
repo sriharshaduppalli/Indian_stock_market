@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import hashlib
+import json
 from pathlib import Path
 
 
@@ -31,3 +33,16 @@ class ContinualLearningManager:
             f"Daily learning loop enabled: {query_count} feedback samples logged; data can be used to refresh retrieval, "
             "recalibrate prediction factors, and improve next-day responses."
         )
+
+    @staticmethod
+    def anonymize_query(query: str) -> str:
+        return hashlib.sha256(query.strip().encode("utf-8")).hexdigest()
+
+    def record_anonymized_feedback(self, query: str, intent: str) -> None:
+        if self.feedback_log_path is None:
+            return
+        self.feedback_log_path.parent.mkdir(parents=True, exist_ok=True)
+        ts = datetime.now(timezone.utc).isoformat()
+        payload = {"ts": ts, "intent": intent, "query_hash": self.anonymize_query(query)}
+        with self.feedback_log_path.open("a", encoding="utf-8") as fp:
+            fp.write(json.dumps(payload, ensure_ascii=False) + "\n")
