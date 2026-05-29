@@ -20,6 +20,9 @@ class AssistantConfig:
     policy_audit_log_path: Path | None = None
     release_registry_path: Path | None = None
     latency_mode: str = "fast"
+    connector_timeout_seconds: float = 1.0
+    connector_retries: int = 2
+    max_data_staleness_hours: int = 1_080
     max_latency_ms: int = 1_200
     min_uptime: float = 0.995
     max_cost_per_query: float = 0.02
