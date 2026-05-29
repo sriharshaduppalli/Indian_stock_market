@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from indian_stock_llm.acceptance import ProductionAcceptanceCriteria, SUPPORTED_QUERY_CATEGORIES
+from indian_stock_llm.api import ApiRequest, ChatApi
 from indian_stock_llm.config import AssistantConfig
 from indian_stock_llm.data_layer import EnterpriseDataLayer
 from indian_stock_llm.evaluation import BenchmarkResult, passes_release_gate
@@ -51,12 +52,16 @@ def test_evaluation_gate_thresholds() -> None:
 
 def test_chat_service_cache_and_contract(tmp_path: Path) -> None:
     assistant = StockMarketAssistant(config=_config(tmp_path))
-    service = ChatService(assistant=assistant, rate_limit_per_minute=5)
-    first = service.query("What is SEBI role in market regulation?")
-    second = service.query("What is SEBI role in market regulation?")
+    service = ChatService(assistant=assistant, rate_limit_per_minute=5, tenant_api_keys={"t1": "k1"})
+    first = service.query("What is SEBI role in market regulation?", tenant_id="t1", api_key="k1")
+    second = service.query("What is SEBI role in market regulation?", tenant_id="t1", api_key="k1")
     assert first["status"] == "ok"
     assert first["response"]["intent"]
+    assert first["response"]["contract"]["version"] == "v1"
+    assert first["response"]["tenant_id"] == "t1"
     assert second.get("cached") is True
+    unauthorized = service.query("What is SEBI role in market regulation?", tenant_id="t1", api_key="bad")
+    assert unauthorized["status"] == "unauthorized"
 
 
 def test_release_registry_versioning_and_rollback(tmp_path: Path) -> None:
@@ -95,3 +100,14 @@ def test_chat_service_circuit_recovery_with_cooldown() -> None:
     second = service.query("test recovery")
     assert first["status"] == "failed"
     assert second["status"] == "ok"
+
+
+def test_chat_api_contract_version(tmp_path: Path) -> None:
+    assistant = StockMarketAssistant(config=_config(tmp_path))
+    service = ChatService(assistant=assistant, tenant_api_keys={"tenant-a": "secret"})
+    api = ChatApi(service)
+    health = api.health()
+    assert health["contract_version"] == "v1"
+    result = api.query(ApiRequest(tenant_id="tenant-a", api_key="secret", query="What is SEBI role in market regulation?"))
+    assert result["status"] == "ok"
+    assert result["response"]["contract_version"] == "v1"

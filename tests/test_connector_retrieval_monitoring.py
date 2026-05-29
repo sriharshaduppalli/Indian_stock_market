@@ -5,7 +5,13 @@ from pathlib import Path
 
 from indian_stock_llm.config import AssistantConfig
 from indian_stock_llm.data_layer import EnterpriseDataLayer
-from indian_stock_llm.evaluation import BenchmarkResult, OnlineFeedbackMetrics, evaluate_release_gate
+from indian_stock_llm.evaluation import (
+    BenchmarkResult,
+    OnlineFeedbackMetrics,
+    RegressionMetrics,
+    evaluate_release_gate,
+    passes_regression_gate,
+)
 from indian_stock_llm.knowledge_base import KnowledgeBase
 from indian_stock_llm.query_engine import StockMarketAssistant
 from indian_stock_llm.release_manager import ReleaseRegistry
@@ -44,6 +50,9 @@ def test_connector_failure_uses_json_fallback_and_flags_partial(tmp_path: Path) 
     assert "instrument_master" in layer.snapshot.partial_feeds
     assert layer.validate_snapshot() is False
     assert layer.snapshot.connector_status["instrument_master"].startswith("json_fallback")
+    readiness = layer.readiness_report()
+    assert readiness.ready is False
+    assert readiness.fallback_mode is True
 
 
 def test_stale_feed_is_detected(tmp_path: Path) -> None:
@@ -93,8 +102,15 @@ def test_release_gate_and_rollout_decision() -> None:
     report = evaluate_release_gate(benchmark, online, criteria)
     registry = ReleaseRegistry(None)
     decision = registry.assess_rollout(report, rollback_rate=0.01)
+    canary = registry.assess_canary(report, canary_error_rate=0.01)
     assert report.passed is True
     assert decision.approved is True
+    assert canary.approved is True
+
+
+def test_regression_gate() -> None:
+    assert passes_regression_gate(RegressionMetrics(0.01, 0.02, 0.01)) is True
+    assert passes_regression_gate(RegressionMetrics(0.04, 0.01, 0.01)) is False
 
 
 def test_service_exports_failure_modes_and_safety_blocks(tmp_path: Path) -> None:

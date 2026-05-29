@@ -26,6 +26,13 @@ class OnlineFeedbackMetrics:
 
 
 @dataclass(frozen=True)
+class RegressionMetrics:
+    factuality_drop: float = 0.0
+    routing_drop: float = 0.0
+    safety_drop: float = 0.0
+
+
+@dataclass(frozen=True)
 class ReleaseGateReport:
     benchmark_passed: bool
     online_passed: bool
@@ -49,7 +56,7 @@ def evaluate_release_gate(
     benchmark_passed = (
         benchmark.fact_accuracy >= criteria.accuracy_min
         and benchmark.calculation_correctness >= criteria.accuracy_min
-        and benchmark.groundedness >= criteria.accuracy_min
+        and benchmark.groundedness >= criteria.groundedness_min
         and benchmark.hallucination_rate <= 1 - criteria.accuracy_min
         and benchmark.safety_score >= criteria.safety_compliance_min
         and benchmark.routing_accuracy >= criteria.accuracy_min
@@ -62,8 +69,8 @@ def evaluate_release_gate(
             online.uptime >= criteria.min_uptime
             and online.avg_latency_ms <= criteria.max_latency_ms
             and online.cost_per_query <= criteria.max_cost_per_query
-            and online.blocked_ratio <= 0.2
-            and online.failure_rate <= 0.1
+            and online.blocked_ratio <= criteria.max_blocked_ratio
+            and online.failure_rate <= criteria.max_failure_rate
         )
         if not online_passed:
             reasons.append("online metrics thresholds unmet")
@@ -82,5 +89,13 @@ def passes_operational_gate(
         online.uptime >= criteria.min_uptime
         and online.avg_latency_ms <= criteria.max_latency_ms
         and online.cost_per_query <= criteria.max_cost_per_query
-        and online.failure_rate <= 0.1
+        and online.failure_rate <= criteria.max_failure_rate
+    )
+
+
+def passes_regression_gate(regression: RegressionMetrics, max_drop: float = 0.03) -> bool:
+    return (
+        regression.factuality_drop <= max_drop
+        and regression.routing_drop <= max_drop
+        and regression.safety_drop <= max_drop
     )

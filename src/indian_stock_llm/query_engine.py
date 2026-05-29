@@ -45,6 +45,7 @@ class StockMarketAssistant:
             max_latency_ms=self.config.max_latency_ms,
             min_uptime=self.config.min_uptime,
             max_cost_per_query=self.config.max_cost_per_query,
+            groundedness_min=self.config.groundedness_min,
         )
         try:
             self.knowledge_base = KnowledgeBase.from_json(self.config.knowledge_base_path)
@@ -122,6 +123,7 @@ class StockMarketAssistant:
     def ask(self, query: str) -> AssistantResponse:
         intent = self.classify_intent(query)
         category = self._category_for_intent(intent)
+        factual_intents = {"fundamentals", "events_news", "market_calculations", "stock_analysis"}
         policy_decision = self.safety_policy.evaluate(query)
         if not policy_decision.allowed:
             return AssistantResponse(
@@ -139,6 +141,21 @@ class StockMarketAssistant:
             )
         self.learning_manager.record_feedback(query=query, intent=intent)
         self.learning_manager.record_anonymized_feedback(query=query, intent=intent)
+        readiness = self.data_layer.readiness_report()
+        if self.config.require_ready_data_for_factual and intent in factual_intents and not readiness.ready:
+            return AssistantResponse(
+                intent=intent,
+                category=category,
+                answer=(
+                    "Data readiness gate blocked this response for factual safety. "
+                    f"Blockers: {', '.join(readiness.blockers) or 'unknown'}."
+                ),
+                confidence=0.0,
+                citations=(),
+                disclaimer=self._policy_disclaimer(intent),
+                safe_for_trading_advice=False,
+                policy_reason="Data readiness gate blocked factual response",
+            )
         resolved_entity = self.data_layer.resolve_entity(query)
         intent_tag_map = {"events_news": "sebi", "fundamentals": "fundamentals"}
         metadata_filters = {"tag": intent_tag_map[intent]} if intent in intent_tag_map else None
@@ -200,12 +217,18 @@ class StockMarketAssistant:
             confidence = 0.25
 
         citations = self._extract_citations(context_items)
-        if intent in {"fundamentals", "events_news", "market_calculations", "stock_analysis"} and not citations:
+        if intent in factual_intents and not citations:
             answer = (
                 "Insufficient grounding: I cannot provide factual/calculation output without citations. "
                 "Please refresh enterprise sources."
             )
             confidence = min(confidence, 0.2)
+        if confidence < self.config.min_confidence_threshold and (context_items or intent in factual_intents):
+            answer = (
+                f"Low-confidence response ({confidence:.2f}) withheld for safety. "
+                "Please refine the question or refresh trusted data sources."
+            )
+            citations = ()
 
         return AssistantResponse(
             intent=intent,
@@ -233,6 +256,7 @@ class StockMarketAssistant:
             "category": response.category,
             "acceptance": {
                 "accuracy_min": self.criteria.accuracy_min,
+                "groundedness_min": self.criteria.groundedness_min,
                 "max_latency_ms": self.criteria.max_latency_ms,
                 "min_uptime": self.criteria.min_uptime,
                 "max_cost_per_query": self.criteria.max_cost_per_query,
@@ -246,5 +270,10 @@ class StockMarketAssistant:
                 "stale_feeds": list(self.data_layer.snapshot.stale_feeds),
                 "partial_feeds": list(self.data_layer.snapshot.partial_feeds),
                 "connector_status": self.data_layer.snapshot.connector_status,
+            },
+            "contract": {
+                "version": self.config.api_contract_version,
+                "target_use_cases": ["grounded_qna", "risk_aware_guidance"],
+                "prohibited_use_cases": ["trade_execution", "guaranteed_return_advice"],
             },
         }

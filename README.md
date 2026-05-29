@@ -1,6 +1,6 @@
 # Indian_stock_market
 
-Indian stock market data, analysis, prompts, queries, and LLM model scaffold.
+Indian stock market data, analysis, prompts, queries, and LLM model scaffold with production-hardening controls.
 
 ## What is implemented
 - High-level architecture in `ARCHITECTURE.md`
@@ -21,6 +21,20 @@ Indian stock market data, analysis, prompts, queries, and LLM model scaffold.
   - Versioned release registry + rollback target helper
   - Daily continual-learning feedback hook
   - Fast latency mode configuration
+  - Frozen integration contract (`v1`) via `ChatApi`
+  - Tenant-aware auth + rate limiting in serving layer
+  - Data readiness release blockers for stale/partial/incomplete source states
+
+  ## Production scope and SLOs
+  - Allowed use cases: grounded Q&A and risk-aware guidance
+  - Disallowed use cases: trade execution and guaranteed-return advice
+  - API contract: `v1` response schema for downstream chat-box integrations
+  - SLO defaults:
+    - max latency: 1200ms
+    - min uptime: 99.5%
+    - min groundedness: 0.85
+    - safety compliance: 0.98
+    - max failure rate: 0.1
 
 ## Quick start
 1. Install dependencies:
@@ -46,3 +60,10 @@ Indian stock market data, analysis, prompts, queries, and LLM model scaffold.
 - Fine-tune base LLM with broader Indian market supervision data
 - Integrate offline+online evaluation for continuous improvement rollouts
 - Connect serving metrics/traces to production monitoring backends
+
+## Integration contract for external chat boxes
+- Use `ChatService` with tenant registration (`register_tenant`) to enforce per-tenant API keys.
+- Use `ChatApi` for stable API methods:
+  - `health()` for liveness + contract version
+  - `metrics()` for operational observability
+  - `query(ApiRequest)` for authenticated tenant-scoped querying

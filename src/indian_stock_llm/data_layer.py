@@ -32,6 +32,16 @@ class EnterpriseDataSnapshot:
     connector_status: dict[str, str]
 
 
+@dataclass(frozen=True)
+class DataReadinessReport:
+    ready: bool
+    blockers: tuple[str, ...]
+    completeness: float
+    freshness_ok: bool
+    lineage_ok: bool
+    fallback_mode: bool
+
+
 class EnterpriseDataLayer:
     def __init__(self, config: AssistantConfig, connectors: tuple[SourceConnector, ...] | None = None):
         self.config = config
@@ -190,3 +200,37 @@ class EnterpriseDataLayer:
             if any(candidate and candidate in q for candidate in candidates):
                 return item
         return None
+
+    def readiness_report(self) -> DataReadinessReport:
+        blockers: list[str] = []
+        total_datasets = len(DATASET_PATH_MAP)
+        available_datasets = 0
+        fallback_mode = False
+        for dataset in DATASET_PATH_MAP:
+            rows = getattr(self._snapshot, dataset)
+            if rows:
+                available_datasets += 1
+            if dataset in self._snapshot.stale_feeds:
+                blockers.append(f"{dataset}:stale")
+            if dataset in self._snapshot.partial_feeds:
+                blockers.append(f"{dataset}:partial")
+                fallback_mode = True
+        completeness = available_datasets / total_datasets if total_datasets else 0.0
+        if completeness < 1.0:
+            blockers.append("dataset:incomplete")
+        lineage_ok = all(
+            dataset in self._snapshot.lineage and self._snapshot.lineage.get(dataset)
+            for dataset in DATASET_PATH_MAP
+        )
+        if not lineage_ok:
+            blockers.append("lineage:missing")
+        freshness_ok = not self._snapshot.stale_feeds
+        ready = not blockers and self.validate_snapshot()
+        return DataReadinessReport(
+            ready=ready,
+            blockers=tuple(dict.fromkeys(blockers)),
+            completeness=completeness,
+            freshness_ok=freshness_ok,
+            lineage_ok=lineage_ok,
+            fallback_mode=fallback_mode,
+        )

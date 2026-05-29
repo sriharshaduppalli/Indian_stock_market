@@ -26,6 +26,10 @@ class AssistantConfig:
     max_latency_ms: int = 1_200
     min_uptime: float = 0.995
     max_cost_per_query: float = 0.02
+    min_confidence_threshold: float = 0.35
+    require_ready_data_for_factual: bool = True
+    api_contract_version: str = "v1"
+    groundedness_min: float = 0.85
 
 
 def default_config() -> AssistantConfig:

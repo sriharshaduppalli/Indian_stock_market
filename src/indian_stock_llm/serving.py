@@ -19,6 +19,7 @@ class ServiceMetrics:
     rate_limited: int = 0
     degraded: int = 0
     safety_blocks: int = 0
+    auth_failures: int = 0
     total_latency_ms: float = 0.0
 
     @property
@@ -33,6 +34,7 @@ class ChatService:
         rate_limit_per_minute: int = 60,
         circuit_breaker_threshold: int = 3,
         circuit_cooldown_seconds: int = 30,
+        tenant_api_keys: dict[str, str] | None = None,
     ):
         self.assistant = assistant
         self.rate_limit_per_minute = rate_limit_per_minute
@@ -40,27 +42,47 @@ class ChatService:
         self.circuit_cooldown_seconds = circuit_cooldown_seconds
         self._cache: dict[str, dict] = {}
         self._request_times: list[datetime] = []
+        self._tenant_request_times: dict[str, list[datetime]] = {}
+        self._tenant_cache: dict[str, dict[str, dict]] = {}
+        self._tenant_api_keys = tenant_api_keys or {}
         self._circuit_open = False
         self._circuit_opened_at: datetime | None = None
         self._consecutive_failures = 0
         self.metrics = ServiceMetrics()
 
-    def _allow_request(self) -> bool:
+    def _allow_request(self, tenant_id: str) -> bool:
         now = datetime.now(timezone.utc)
         minute_ago = now - timedelta(minutes=1)
         self._request_times = [ts for ts in self._request_times if ts >= minute_ago]
-        if len(self._request_times) >= self.rate_limit_per_minute:
+        tenant_times = self._tenant_request_times.get(tenant_id, [])
+        tenant_times = [ts for ts in tenant_times if ts >= minute_ago]
+        self._tenant_request_times[tenant_id] = tenant_times
+        if len(tenant_times) >= self.rate_limit_per_minute:
             return False
         self._request_times.append(now)
+        self._tenant_request_times[tenant_id].append(now)
         return True
 
-    def query(self, user_query: str) -> dict:
-        if not self._allow_request():
+    def register_tenant(self, tenant_id: str, api_key: str) -> None:
+        self._tenant_api_keys[tenant_id] = api_key
+
+    def _authenticate(self, tenant_id: str, api_key: str | None) -> bool:
+        expected = self._tenant_api_keys.get(tenant_id)
+        if expected is None:
+            return True
+        return api_key == expected
+
+    def query(self, user_query: str, *, tenant_id: str = "public", api_key: str | None = None) -> dict:
+        if not self._authenticate(tenant_id, api_key):
+            self.metrics.auth_failures += 1
+            return {"status": "unauthorized", "response": self._fallback_response("Unauthorized tenant access")}
+        if not self._allow_request(tenant_id):
             self.metrics.rate_limited += 1
             return {"status": "rate_limited", "response": self._fallback_response("Rate limit exceeded")}
-        if user_query in self._cache:
+        tenant_cache = self._tenant_cache.setdefault(tenant_id, {})
+        if user_query in tenant_cache:
             self.metrics.cache_hits += 1
-            return {"status": "ok", "response": self._cache[user_query], "cached": True}
+            return {"status": "ok", "response": tenant_cache[user_query], "cached": True}
         if self._circuit_open:
             now = datetime.now(timezone.utc)
             if self._circuit_opened_at and now - self._circuit_opened_at < timedelta(seconds=self.circuit_cooldown_seconds):
@@ -75,7 +97,8 @@ class ChatService:
         for _ in range(2):
             try:
                 payload = self.assistant.query(user_query)
-                self._cache[user_query] = payload
+                payload["tenant_id"] = tenant_id
+                tenant_cache[user_query] = payload
                 self._consecutive_failures = 0
                 if payload.get("policy_reason", "").lower().startswith(("prompt-injection", "prohibited")):
                     self.metrics.safety_blocks += 1
@@ -118,5 +141,6 @@ class ChatService:
             "rate_limited": float(self.metrics.rate_limited),
             "degraded": float(self.metrics.degraded),
             "safety_blocks": float(self.metrics.safety_blocks),
+            "auth_failures": float(self.metrics.auth_failures),
             "circuit_open": self._circuit_open,
         }

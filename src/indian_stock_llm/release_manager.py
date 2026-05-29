@@ -20,6 +20,7 @@ class RolloutDecision:
     approved: bool
     rollback_target: str | None
     reason: str
+    canary_only: bool = False
 
 
 class ReleaseRegistry:
@@ -64,3 +65,30 @@ class ReleaseRegistry:
                 reason="rollback-rate threshold exceeded",
             )
         return RolloutDecision(approved=True, rollback_target=None, reason="rollout criteria satisfied")
+
+    def assess_canary(
+        self,
+        gate_report: ReleaseGateReport,
+        canary_error_rate: float,
+        max_canary_error_rate: float = 0.05,
+    ) -> RolloutDecision:
+        if not gate_report.passed:
+            return RolloutDecision(
+                approved=False,
+                rollback_target=self.rollback_target(),
+                reason="canary blocked: release gate unmet",
+                canary_only=True,
+            )
+        if canary_error_rate > max_canary_error_rate:
+            return RolloutDecision(
+                approved=False,
+                rollback_target=self.rollback_target(),
+                reason="canary blocked: error-rate threshold exceeded",
+                canary_only=True,
+            )
+        return RolloutDecision(
+            approved=True,
+            rollback_target=None,
+            reason="canary criteria satisfied",
+            canary_only=True,
+        )
