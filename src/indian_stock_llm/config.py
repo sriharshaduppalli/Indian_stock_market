@@ -11,8 +11,14 @@ class AssistantConfig:
     knowledge_base_path: Path
     top_k_context: int = 3
     min_retrieval_score: float = 2.0
+    feedback_log_path: Path | None = None
+    latency_mode: str = "fast"
 
 
 def default_config() -> AssistantConfig:
     root = Path(__file__).resolve().parents[2]
-    return AssistantConfig(knowledge_base_path=root / "data" / "sample_knowledge.json")
+    return AssistantConfig(
+        knowledge_base_path=root / "data" / "sample_knowledge.json",
+        feedback_log_path=root / "data" / "daily_feedback.log",
+        latency_mode="fast",
+    )

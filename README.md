@@ -8,6 +8,9 @@ Indian stock market data, analysis, prompts, queries, and LLM model scaffold.
   - Intent classification
   - Domain knowledge retrieval
   - Grounded response composition with source citations
+  - Prediction-intent path with live-impact factor guidance
+  - Daily continual-learning feedback hook
+  - Fast latency mode configuration
 
 ## Quick start
 1. Install dependencies:
@@ -28,3 +31,4 @@ Indian stock market data, analysis, prompts, queries, and LLM model scaffold.
 - Add vector retrieval + reranking
 - Fine-tune a base LLM with Indian market instruction data
 - Add robust evaluation benchmark and guardrails
+- Add automated daily retraining jobs and latency SLO dashboards
