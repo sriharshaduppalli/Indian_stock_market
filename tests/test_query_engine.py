@@ -45,3 +45,19 @@ def test_prediction_intent_and_daily_learning_hook(tmp_path: Path) -> None:
     assert "Prediction factors considered" in response.answer
     assert "Daily learning loop enabled" in response.answer
     assert feedback_log.exists()
+
+
+def test_market_calculations_intent(tmp_path: Path) -> None:
+    assistant = _assistant_with_repo_kb(tmp_path)
+    response = assistant.ask("How do I calculate CAGR and volatility for Indian stocks?")
+
+    assert response.intent == "market_calculations"
+    assert "Relevant market context" in response.answer
+
+
+def test_stock_analysis_intent(tmp_path: Path) -> None:
+    assistant = _assistant_with_repo_kb(tmp_path)
+    response = assistant.ask("Provide technical analysis for NSE listed banking stocks")
+
+    assert response.intent == "stock_analysis"
+    assert "Relevant market context" in response.answer

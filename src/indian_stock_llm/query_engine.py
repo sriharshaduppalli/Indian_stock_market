@@ -12,6 +12,8 @@ PREDICTION_KEYWORDS = {"predict", "prediction", "forecast", "tomorrow", "next", 
 FUNDAMENTAL_KEYWORDS = {"pe", "valuation", "fundamental", "fundamentals", "profit", "profits"}
 EVENT_KEYWORDS = {"news", "event", "result", "results", "quarter", "guidance"}
 PORTFOLIO_KEYWORDS = {"portfolio", "allocation", "risk", "diversification"}
+ANALYSIS_KEYWORDS = {"analyze", "analysis", "technical", "trend", "momentum"}
+CALCULATION_KEYWORDS = {"calculate", "calculation", "cagr", "return", "volatility", "beta"}
 
 
 @dataclass(frozen=True)
@@ -38,10 +40,14 @@ class StockMarketAssistant:
         tokens = {m.group(0) for m in re.finditer(r"[a-z0-9]+", q)}
         if PRICE_ACTION_KEYWORDS & tokens:
             return "price_action"
+        if CALCULATION_KEYWORDS & tokens:
+            return "market_calculations"
         if PREDICTION_KEYWORDS & tokens:
             return "prediction"
         if "balance sheet" in q or FUNDAMENTAL_KEYWORDS & tokens:
             return "fundamentals"
+        if ANALYSIS_KEYWORDS & tokens:
+            return "stock_analysis"
         if EVENT_KEYWORDS & tokens:
             return "events_news"
         if PORTFOLIO_KEYWORDS & tokens:

@@ -6,6 +6,7 @@ Indian stock market data, analysis, prompts, queries, and LLM model scaffold.
 - High-level architecture in `ARCHITECTURE.md`
 - Initial local assistant scaffold for Indian stock market Q&A:
   - Intent classification
+    - Covers general Indian stock market, NSE/BSE/SEBI context, stock analysis, market calculations, and prediction intents
   - Domain knowledge retrieval
   - Grounded response composition with source citations
   - Prediction-intent path with live-impact factor guidance

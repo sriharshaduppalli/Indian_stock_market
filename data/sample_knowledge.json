@@ -26,5 +26,40 @@
     "content": "Concentration in a single sector increases drawdown risk; diversification across sectors and market caps can reduce volatility.",
     "tags": ["portfolio", "risk", "diversification"],
     "source": "domain_seed_v1"
+  },
+  {
+    "id": "k5",
+    "title": "NSE and BSE basics",
+    "content": "NSE and BSE are India's primary exchanges. Stocks can have NSE symbols and BSE scrip codes mapped to the same company and ISIN.",
+    "tags": ["nse", "bse", "exchange", "isin"],
+    "source": "domain_seed_v1"
+  },
+  {
+    "id": "k6",
+    "title": "SEBI role in market regulation",
+    "content": "SEBI regulates securities markets, disclosure standards, insider-trading rules, and investor-protection requirements.",
+    "tags": ["sebi", "regulation", "compliance"],
+    "source": "domain_seed_v1"
+  },
+  {
+    "id": "k7",
+    "title": "Core market calculations",
+    "content": "Common market calculations include absolute return, CAGR, volatility, drawdown, and risk-adjusted ratios such as Sharpe.",
+    "tags": ["calculation", "cagr", "return", "volatility", "drawdown", "sharpe"],
+    "source": "domain_seed_v1"
+  },
+  {
+    "id": "k8",
+    "title": "Stock analysis checklist",
+    "content": "Stock analysis combines fundamentals, technical trend, volume behavior, earnings quality, sector positioning, and event risk.",
+    "tags": ["analysis", "fundamental", "technical", "earnings"],
+    "source": "domain_seed_v1"
+  },
+  {
+    "id": "k9",
+    "title": "Prediction guardrails",
+    "content": "Stock prediction should be probabilistic, include uncertainty bounds, and avoid guaranteed-return claims while citing data recency.",
+    "tags": ["prediction", "forecast", "risk", "uncertainty"],
+    "source": "domain_seed_v1"
   }
 ]
