@@ -20,6 +20,7 @@ class ServiceMetrics:
     degraded: int = 0
     safety_blocks: int = 0
     auth_failures: int = 0
+    invalid_requests: int = 0
     total_latency_ms: float = 0.0
 
     @property
@@ -35,6 +36,8 @@ class ChatService:
         circuit_breaker_threshold: int = 3,
         circuit_cooldown_seconds: int = 30,
         tenant_api_keys: dict[str, str] | None = None,
+        cache_ttl_seconds: int = 300,
+        max_query_length: int = 2_000,
     ):
         self.assistant = assistant
         self.rate_limit_per_minute = rate_limit_per_minute
@@ -43,8 +46,10 @@ class ChatService:
         self._cache: dict[str, dict] = {}
         self._request_times: list[datetime] = []
         self._tenant_request_times: dict[str, list[datetime]] = {}
-        self._tenant_cache: dict[str, dict[str, dict]] = {}
+        self._tenant_cache: dict[str, dict[str, tuple[dict, datetime]]] = {}
         self._tenant_api_keys = tenant_api_keys or {}
+        self.cache_ttl_seconds = cache_ttl_seconds
+        self.max_query_length = max_query_length
         self._circuit_open = False
         self._circuit_opened_at: datetime | None = None
         self._consecutive_failures = 0
@@ -67,22 +72,44 @@ class ChatService:
         self._tenant_api_keys[tenant_id] = api_key
 
     def _authenticate(self, tenant_id: str, api_key: str | None) -> bool:
+        if not self._tenant_api_keys:
+            return True
         expected = self._tenant_api_keys.get(tenant_id)
         if expected is None:
-            return True
-        return api_key == expected
+            return False
+        return bool(api_key) and api_key == expected
+
+    def _valid_query(self, query: str) -> bool:
+        trimmed = query.strip()
+        return bool(trimmed) and len(trimmed) <= self.max_query_length
+
+    def _get_cached_response(self, tenant_id: str, query: str) -> dict | None:
+        tenant_cache = self._tenant_cache.setdefault(tenant_id, {})
+        entry = tenant_cache.get(query)
+        if entry is None:
+            return None
+        payload, created_at = entry
+        ttl_elapsed = datetime.now(timezone.utc) - created_at
+        if ttl_elapsed >= timedelta(seconds=self.cache_ttl_seconds):
+            tenant_cache.pop(query, None)
+            return None
+        return payload
 
     def query(self, user_query: str, *, tenant_id: str = "public", api_key: str | None = None) -> dict:
+        if not self._valid_query(user_query):
+            self.metrics.invalid_requests += 1
+            return {"status": "bad_request", "response": self._fallback_response("Query must be non-empty and within max length")}
         if not self._authenticate(tenant_id, api_key):
             self.metrics.auth_failures += 1
             return {"status": "unauthorized", "response": self._fallback_response("Unauthorized tenant access")}
         if not self._allow_request(tenant_id):
             self.metrics.rate_limited += 1
             return {"status": "rate_limited", "response": self._fallback_response("Rate limit exceeded")}
-        tenant_cache = self._tenant_cache.setdefault(tenant_id, {})
-        if user_query in tenant_cache:
+        normalized_query = user_query.strip()
+        cached_payload = self._get_cached_response(tenant_id, normalized_query)
+        if cached_payload is not None:
             self.metrics.cache_hits += 1
-            return {"status": "ok", "response": tenant_cache[user_query], "cached": True}
+            return {"status": "ok", "response": cached_payload, "cached": True}
         if self._circuit_open:
             now = datetime.now(timezone.utc)
             if self._circuit_opened_at and now - self._circuit_opened_at < timedelta(seconds=self.circuit_cooldown_seconds):
@@ -96,9 +123,10 @@ class ChatService:
         last_error: Exception | None = None
         for _ in range(2):
             try:
-                payload = self.assistant.query(user_query)
+                payload = self.assistant.query(normalized_query)
                 payload["tenant_id"] = tenant_id
-                tenant_cache[user_query] = payload
+                tenant_cache = self._tenant_cache.setdefault(tenant_id, {})
+                tenant_cache[normalized_query] = (payload, datetime.now(timezone.utc))
                 self._consecutive_failures = 0
                 if payload.get("policy_reason", "").lower().startswith(("prompt-injection", "prohibited")):
                     self.metrics.safety_blocks += 1
@@ -142,5 +170,6 @@ class ChatService:
             "degraded": float(self.metrics.degraded),
             "safety_blocks": float(self.metrics.safety_blocks),
             "auth_failures": float(self.metrics.auth_failures),
+            "invalid_requests": float(self.metrics.invalid_requests),
             "circuit_open": self._circuit_open,
         }

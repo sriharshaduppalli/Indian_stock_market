@@ -63,6 +63,8 @@ Indian stock market data, analysis, prompts, queries, and LLM model scaffold wit
 
 ## Integration contract for external chat boxes
 - Use `ChatService` with tenant registration (`register_tenant`) to enforce per-tenant API keys.
+- When tenant auth is configured, unregistered tenants are rejected (`unauthorized`).
+- Requests with empty/whitespace-only queries are rejected (`bad_request`).
 - Use `ChatApi` for stable API methods:
   - `health()` for liveness + contract version
   - `metrics()` for operational observability

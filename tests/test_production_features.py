@@ -111,3 +111,45 @@ def test_chat_api_contract_version(tmp_path: Path) -> None:
     result = api.query(ApiRequest(tenant_id="tenant-a", api_key="secret", query="What is SEBI role in market regulation?"))
     assert result["status"] == "ok"
     assert result["response"]["contract_version"] == "v1"
+
+
+def test_unregistered_tenant_is_rejected_when_auth_is_configured(tmp_path: Path) -> None:
+    assistant = StockMarketAssistant(config=_config(tmp_path))
+    service = ChatService(assistant=assistant, tenant_api_keys={"tenant-a": "secret"})
+    result = service.query("What is SEBI role in market regulation?", tenant_id="tenant-b", api_key="secret")
+    assert result["status"] == "unauthorized"
+
+
+def test_empty_query_is_rejected(tmp_path: Path) -> None:
+    assistant = StockMarketAssistant(config=_config(tmp_path))
+    service = ChatService(assistant=assistant)
+    result = service.query("   ")
+    assert result["status"] == "bad_request"
+    metrics = service.export_metrics()
+    assert metrics["invalid_requests"] == 1.0
+
+
+def test_cache_entry_expires_when_ttl_elapsed() -> None:
+    class CountingAssistant:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def query(self, _query: str) -> dict:
+            self.calls += 1
+            return {
+                "intent": "general_query",
+                "answer": "ok",
+                "confidence": 0.5,
+                "citations": [],
+                "disclaimer": "Informational only.",
+                "safe_for_trading_advice": False,
+            }
+
+    assistant = CountingAssistant()
+    service = ChatService(assistant=assistant, cache_ttl_seconds=0)
+    first = service.query("What is SEBI role in market regulation?")
+    second = service.query("What is SEBI role in market regulation?")
+    assert first["status"] == "ok"
+    assert second["status"] == "ok"
+    assert second["cached"] is False
+    assert assistant.calls == 2
