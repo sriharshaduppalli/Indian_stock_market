@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
+from urllib import request
 
 from .acceptance import ProductionAcceptanceCriteria
 
@@ -72,6 +73,10 @@ def _parse_iso_utc(value: str | None) -> datetime | None:
 
 def load_automated_gate_inputs(path: Path, max_age_minutes: int = 30) -> AutomatedGateInputs:
     payload = json.loads(path.read_text(encoding="utf-8"))
+    return _build_automated_gate_inputs(payload, max_age_minutes=max_age_minutes)
+
+
+def _build_automated_gate_inputs(payload: dict, max_age_minutes: int) -> AutomatedGateInputs:
     benchmark = BenchmarkResult(**payload["benchmark"])
     online = OnlineFeedbackMetrics(**payload["online"])
     regression = RegressionMetrics(**payload.get("regression", {}))
@@ -87,6 +92,23 @@ def load_automated_gate_inputs(path: Path, max_age_minutes: int = 30) -> Automat
         source=str(payload.get("source", "unknown")),
         ingested_at=timestamp.isoformat(),
     )
+
+
+def load_automated_gate_inputs_from_endpoint(
+    endpoint: str,
+    *,
+    api_key: str | None = None,
+    timeout_seconds: float = 2.0,
+    max_age_minutes: int = 30,
+) -> AutomatedGateInputs:
+    req = request.Request(endpoint, method="GET")
+    if api_key:
+        req.add_header("X-API-Key", api_key)
+    with request.urlopen(req, timeout=timeout_seconds) as response:
+        payload = json.loads(response.read().decode("utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError("automated gate endpoint returned invalid payload")
+    return _build_automated_gate_inputs(payload, max_age_minutes=max_age_minutes)
 
 
 def passes_release_gate(result: BenchmarkResult, criteria: ProductionAcceptanceCriteria) -> bool:

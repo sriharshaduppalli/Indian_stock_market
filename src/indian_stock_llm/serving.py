@@ -10,6 +10,7 @@ from pathlib import Path
 from time import perf_counter
 from typing import Protocol
 
+from .monitoring import evaluate_sre_readiness
 from .monitoring import MonitoringBackend, NullMonitoringBackend
 from .query_engine import StockMarketAssistant
 
@@ -194,12 +195,34 @@ class ChatService:
         self.metrics = ServiceMetrics()
         self.monitoring_backend = monitoring_backend or NullMonitoringBackend()
         self.state_backend = state_backend or InMemoryStateBackend()
+        self._active_slo_alerts: set[str] = set()
 
     def _emit_event(self, event: str, payload: dict[str, str | float | bool]) -> None:
         self.monitoring_backend.emit_event(event, payload)
 
     def _emit_metrics(self) -> None:
-        self.monitoring_backend.emit_metrics(self.export_metrics())
+        metrics = self.export_metrics()
+        self.monitoring_backend.emit_metrics(metrics)
+        readiness = evaluate_sre_readiness(metrics)
+        current_alerts = set(readiness.get("alerts", ()))
+        for alert in sorted(current_alerts - self._active_slo_alerts):
+            self.monitoring_backend.emit_event(
+                "slo.alert",
+                {
+                    "alert": alert,
+                    "runbook": str(readiness.get("runbook", "")),
+                    "rollback_drill": str(readiness.get("rollback_drill", "")),
+                },
+            )
+        for cleared in sorted(self._active_slo_alerts - current_alerts):
+            self.monitoring_backend.emit_event(
+                "slo.alert_cleared",
+                {
+                    "alert": cleared,
+                    "runbook": str(readiness.get("runbook", "")),
+                },
+            )
+        self._active_slo_alerts = current_alerts
 
     def _policy_for(self, tenant_id: str) -> TenantPolicy:
         return self.tenant_policies.get(tenant_id, TenantPolicy())

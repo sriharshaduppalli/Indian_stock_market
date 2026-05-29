@@ -61,6 +61,8 @@ class StockMarketAssistant:
             HttpEmbeddingProvider(
                 endpoint=self.config.embedding_endpoint,
                 api_key=self.config.embedding_api_key,
+                provider=self.config.embedding_provider,
+                model=self.config.embedding_model,
             )
             if self.config.embedding_endpoint
             else LocalHashEmbeddingProvider()
@@ -69,6 +71,8 @@ class StockMarketAssistant:
             HttpReranker(
                 endpoint=self.config.reranker_endpoint,
                 api_key=self.config.reranker_api_key,
+                provider=self.config.reranker_provider,
+                model=self.config.reranker_model,
             )
             if self.config.reranker_endpoint
             else HeuristicReranker()
@@ -93,6 +97,9 @@ class StockMarketAssistant:
             HttpModelBackend(
                 endpoint=self.config.model_endpoint,
                 api_key=self.config.model_api_key,
+                provider=self.config.model_provider,
+                model=self.config.model_name,
+                model_name=self.config.model_name or "remote-llm",
             )
             if self.config.model_endpoint
             else TemplateModelBackend()

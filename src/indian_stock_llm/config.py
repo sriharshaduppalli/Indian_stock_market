@@ -45,16 +45,25 @@ class AssistantConfig:
     monitoring_api_key: str | None = None
     embedding_endpoint: str | None = None
     embedding_api_key: str | None = None
+    embedding_provider: str = "generic"
+    embedding_model: str | None = None
     reranker_endpoint: str | None = None
     reranker_api_key: str | None = None
+    reranker_provider: str = "generic"
+    reranker_model: str | None = None
     model_endpoint: str | None = None
     model_api_key: str | None = None
+    model_provider: str = "generic"
+    model_name: str | None = None
     model_timeout_seconds: float = 2.5
     background_refresh_enabled: bool = False
     background_refresh_interval_seconds: float = 300.0
     rollout_auto_promote: bool = False
     rollout_max_canary_error_rate: float = 0.05
     rollout_max_rollback_rate: float = 0.1
+    rollout_inputs_endpoint: str | None = None
+    rollout_inputs_api_key: str | None = None
+    rollout_inputs_timeout_seconds: float = 2.0
 
 
 def default_config() -> AssistantConfig:
@@ -120,10 +129,16 @@ def runtime_config_from_env(base: AssistantConfig | None = None) -> AssistantCon
             "monitoring_api_key": os.getenv("ISM_MONITORING_API_KEY", config.monitoring_api_key),
             "embedding_endpoint": os.getenv("ISM_EMBEDDING_ENDPOINT", config.embedding_endpoint),
             "embedding_api_key": os.getenv("ISM_EMBEDDING_API_KEY", config.embedding_api_key),
+            "embedding_provider": os.getenv("ISM_EMBEDDING_PROVIDER", config.embedding_provider),
+            "embedding_model": os.getenv("ISM_EMBEDDING_MODEL", config.embedding_model),
             "reranker_endpoint": os.getenv("ISM_RERANKER_ENDPOINT", config.reranker_endpoint),
             "reranker_api_key": os.getenv("ISM_RERANKER_API_KEY", config.reranker_api_key),
+            "reranker_provider": os.getenv("ISM_RERANKER_PROVIDER", config.reranker_provider),
+            "reranker_model": os.getenv("ISM_RERANKER_MODEL", config.reranker_model),
             "model_endpoint": os.getenv("ISM_MODEL_ENDPOINT", config.model_endpoint),
             "model_api_key": os.getenv("ISM_MODEL_API_KEY", config.model_api_key),
+            "model_provider": os.getenv("ISM_MODEL_PROVIDER", config.model_provider),
+            "model_name": os.getenv("ISM_MODEL_NAME", config.model_name),
             "connector_timeout_seconds": _env_float("ISM_CONNECTOR_TIMEOUT_SECONDS", config.connector_timeout_seconds),
             "connector_retries": _env_int("ISM_CONNECTOR_RETRIES", config.connector_retries),
             "model_timeout_seconds": _env_float("ISM_MODEL_TIMEOUT_SECONDS", config.model_timeout_seconds),
@@ -144,6 +159,11 @@ def runtime_config_from_env(base: AssistantConfig | None = None) -> AssistantCon
             ),
             "rollout_max_rollback_rate": _env_float(
                 "ISM_ROLLOUT_MAX_ROLLBACK_RATE", config.rollout_max_rollback_rate
+            ),
+            "rollout_inputs_endpoint": os.getenv("ISM_ROLLOUT_INPUTS_ENDPOINT", config.rollout_inputs_endpoint),
+            "rollout_inputs_api_key": os.getenv("ISM_ROLLOUT_INPUTS_API_KEY", config.rollout_inputs_api_key),
+            "rollout_inputs_timeout_seconds": _env_float(
+                "ISM_ROLLOUT_INPUTS_TIMEOUT_SECONDS", config.rollout_inputs_timeout_seconds
             ),
         }
     )

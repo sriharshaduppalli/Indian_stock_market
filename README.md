@@ -62,10 +62,17 @@ Indian stock market data, analysis, prompts, queries, and LLM model scaffold wit
    PYTHONPATH=src python -m indian_stock_llm.cli --json "Predict NIFTY next week"
    ```
 
-## Next steps for production-grade accuracy
-- Connect managed embedding/reranker/model providers for full production inference quality
-- Enable automated benchmark/canary ingestion jobs feeding `ReleaseRegistry.automate_rollout_from_inputs`
-- Wire dashboards/alerts to `p95_latency_ms`, `p99_latency_ms`, and `error_budget_remaining`
+## Production integration knobs
+- Managed providers:
+  - `ISM_EMBEDDING_PROVIDER`, `ISM_EMBEDDING_MODEL`, `ISM_EMBEDDING_ENDPOINT`, `ISM_EMBEDDING_API_KEY`
+  - `ISM_RERANKER_PROVIDER`, `ISM_RERANKER_MODEL`, `ISM_RERANKER_ENDPOINT`, `ISM_RERANKER_API_KEY`
+  - `ISM_MODEL_PROVIDER`, `ISM_MODEL_NAME`, `ISM_MODEL_ENDPOINT`, `ISM_MODEL_API_KEY`
+- Automated rollout ingestion:
+  - `ISM_ROLLOUT_INPUTS_ENDPOINT`, `ISM_ROLLOUT_INPUTS_API_KEY`, `ISM_ROLLOUT_INPUTS_TIMEOUT_SECONDS`
+  - Use `ReleaseRegistry.automate_rollout_from_endpoint(...)` for remote benchmark/canary gate ingestion.
+- Dashboards and alerts:
+  - `ChatService` now emits `slo.alert` and `slo.alert_cleared` events based on `p95_latency_ms`, `p99_latency_ms`, `failure_rate`, and `error_budget_remaining`.
+  - `evaluate_sre_readiness` maps alert outputs to the runbook at `docs/runbooks/chat_service_incident.md`.
 
 ## Integration contract for external chat boxes
 - Use `ChatService` with tenant registration (`register_tenant`) to enforce per-tenant API keys.

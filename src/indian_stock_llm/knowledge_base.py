@@ -74,10 +74,18 @@ class LocalHashEmbeddingProvider:
 class HttpEmbeddingProvider:
     endpoint: str
     api_key: str | None = None
+    provider: str = "generic"
+    model: str | None = None
     timeout_seconds: float = 2.0
 
     def encode(self, texts: list[str]) -> list[tuple[float, ...]]:
-        payload = {"texts": texts}
+        provider = self.provider.strip().lower()
+        if provider in {"openai", "azure_openai"}:
+            payload = {"input": texts}
+            if self.model:
+                payload["model"] = self.model
+        else:
+            payload = {"texts": texts}
         req = request.Request(
             self.endpoint,
             data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
@@ -85,10 +93,18 @@ class HttpEmbeddingProvider:
             headers={"Content-Type": "application/json"},
         )
         if self.api_key:
-            req.add_header("X-API-Key", self.api_key)
+            header = "Authorization" if provider in {"openai", "azure_openai"} else "X-API-Key"
+            value = self.api_key
+            req.add_header(header, value)
         with request.urlopen(req, timeout=self.timeout_seconds) as response:
             body = json.loads(response.read().decode("utf-8"))
-        embeddings = body.get("embeddings", []) if isinstance(body, dict) else []
+        if not isinstance(body, dict):
+            raise ValueError("embedding provider returned invalid payload")
+        if provider in {"openai", "azure_openai"}:
+            rows = body.get("data", [])
+            embeddings = [row.get("embedding") for row in rows if isinstance(row, dict)]
+        else:
+            embeddings = body.get("embeddings", [])
         parsed: list[tuple[float, ...]] = []
         for row in embeddings:
             if not isinstance(row, list) or not row:
@@ -139,6 +155,8 @@ class HeuristicReranker:
 class HttpReranker:
     endpoint: str
     api_key: str | None = None
+    provider: str = "generic"
+    model: str | None = None
     timeout_seconds: float = 2.0
 
     def rerank(
@@ -147,20 +165,31 @@ class HttpReranker:
         intent: str | None,
         scored_items: list[tuple[KnowledgeItem, float, int, float]],
     ) -> list[tuple[KnowledgeItem, float, int, float]]:
-        payload = {
-            "query": query,
-            "intent": intent,
-            "items": [
-                {
-                    "id": item.id,
-                    "title": item.title,
-                    "content": item.content,
-                    "tags": item.tags,
-                    "base_score": score,
-                }
-                for item, score, _, _ in scored_items
-            ],
-        }
+        provider = self.provider.strip().lower()
+        items = [
+            {
+                "id": item.id,
+                "title": item.title,
+                "content": item.content,
+                "tags": item.tags,
+                "base_score": score,
+            }
+            for item, score, _, _ in scored_items
+        ]
+        if provider == "cohere":
+            payload = {
+                "query": query,
+                "documents": [f"{row['title']}\n{row['content']}" for row in items],
+                "top_n": len(items),
+            }
+            if self.model:
+                payload["model"] = self.model
+        else:
+            payload = {
+                "query": query,
+                "intent": intent,
+                "items": items,
+            }
         req = request.Request(
             self.endpoint,
             data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
@@ -168,10 +197,26 @@ class HttpReranker:
             headers={"Content-Type": "application/json"},
         )
         if self.api_key:
-            req.add_header("X-API-Key", self.api_key)
+            header = "Authorization" if provider == "cohere" else "X-API-Key"
+            value = self.api_key
+            req.add_header(header, value)
         with request.urlopen(req, timeout=self.timeout_seconds) as response:
             body = json.loads(response.read().decode("utf-8"))
-        remote_scores = body.get("scores", {}) if isinstance(body, dict) else {}
+        if not isinstance(body, dict):
+            return scored_items
+        if provider == "cohere":
+            results = body.get("results", [])
+            if not isinstance(results, list):
+                return scored_items
+            score_by_index = {
+                int(row.get("index")): float(row.get("relevance_score", 0.0))
+                for row in results
+                if isinstance(row, dict) and isinstance(row.get("index"), int)
+            }
+            indexed = list(enumerate(scored_items))
+            indexed.sort(key=lambda row: score_by_index.get(row[0], row[1][1]), reverse=True)
+            return [row[1] for row in indexed]
+        remote_scores = body.get("scores", {})
         if not isinstance(remote_scores, dict):
             return scored_items
         by_id = {item.id: score for item, score, _, _ in scored_items}

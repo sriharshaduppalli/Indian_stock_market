@@ -30,20 +30,44 @@ class TemplateModelBackend:
 class HttpModelBackend:
     endpoint: str
     api_key: str | None = None
+    provider: str = "generic"
+    model: str | None = None
     model_name: str = "remote-llm"
 
     def generate(self, prompt: str, timeout_seconds: float) -> ModelResponse:
+        provider = self.provider.strip().lower()
+        if provider in {"openai", "azure_openai"}:
+            payload: dict[str, object] = {
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0,
+            }
+            if self.model:
+                payload["model"] = self.model
+        else:
+            payload = {"prompt": prompt}
         req = request.Request(
             self.endpoint,
-            data=json.dumps({"prompt": prompt}, ensure_ascii=False).encode("utf-8"),
+            data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
             method="POST",
             headers={"Content-Type": "application/json"},
         )
         if self.api_key:
-            req.add_header("X-API-Key", self.api_key)
+            header = "Authorization" if provider in {"openai", "azure_openai"} else "X-API-Key"
+            req.add_header(header, self.api_key)
         with request.urlopen(req, timeout=timeout_seconds) as response:
             payload = json.loads(response.read().decode("utf-8"))
-        answer = payload.get("answer") if isinstance(payload, dict) else None
+        answer: str | None = None
+        if isinstance(payload, dict):
+            if provider in {"openai", "azure_openai"}:
+                choices = payload.get("choices", [])
+                if isinstance(choices, list) and choices and isinstance(choices[0], dict):
+                    message = choices[0].get("message", {})
+                    if isinstance(message, dict):
+                        content = message.get("content")
+                        if isinstance(content, str):
+                            answer = content
+            else:
+                answer = payload.get("answer")
         if not isinstance(answer, str) or not answer.strip():
             raise ValueError("model backend returned empty answer")
         return ModelResponse(answer=answer.strip(), model_name=self.model_name, latency_mode="inference")

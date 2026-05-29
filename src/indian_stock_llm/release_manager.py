@@ -6,7 +6,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .evaluation import ReleaseGateReport
-from .evaluation import RegressionMetrics, evaluate_release_gate, load_automated_gate_inputs, passes_regression_gate
+from .evaluation import (
+    RegressionMetrics,
+    evaluate_release_gate,
+    load_automated_gate_inputs,
+    load_automated_gate_inputs_from_endpoint,
+    passes_regression_gate,
+)
 from .acceptance import ProductionAcceptanceCriteria
 
 
@@ -168,6 +174,45 @@ class ReleaseRegistry:
         auto_promote: bool = False,
     ) -> RolloutAutomationResult:
         gate_inputs = load_automated_gate_inputs(input_path, max_age_minutes=max_age_minutes)
+        gate_report = evaluate_release_gate(
+            benchmark=gate_inputs.benchmark,
+            online=gate_inputs.online,
+            criteria=criteria,
+        )
+        return self.automate_rollout(
+            version=version,
+            notes=notes,
+            gate_report=gate_report,
+            regression=gate_inputs.regression,
+            rollback_rate=rollback_rate,
+            canary_error_rate=canary_error_rate,
+            max_canary_error_rate=max_canary_error_rate,
+            max_rollback_rate=max_rollback_rate,
+            auto_promote=auto_promote,
+        )
+
+    def automate_rollout_from_endpoint(
+        self,
+        *,
+        version: str,
+        notes: str,
+        endpoint: str,
+        criteria: ProductionAcceptanceCriteria,
+        rollback_rate: float,
+        canary_error_rate: float,
+        api_key: str | None = None,
+        timeout_seconds: float = 2.0,
+        max_age_minutes: int = 30,
+        max_canary_error_rate: float = 0.05,
+        max_rollback_rate: float = 0.1,
+        auto_promote: bool = False,
+    ) -> RolloutAutomationResult:
+        gate_inputs = load_automated_gate_inputs_from_endpoint(
+            endpoint=endpoint,
+            api_key=api_key,
+            timeout_seconds=timeout_seconds,
+            max_age_minutes=max_age_minutes,
+        )
         gate_report = evaluate_release_gate(
             benchmark=gate_inputs.benchmark,
             online=gate_inputs.online,

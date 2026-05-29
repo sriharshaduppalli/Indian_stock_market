@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from urllib import request
 
 from indian_stock_llm.config import AssistantConfig
 from indian_stock_llm.config import runtime_config_from_env
@@ -14,10 +15,13 @@ from indian_stock_llm.evaluation import (
     RegressionMetrics,
     evaluate_release_gate,
     load_automated_gate_inputs,
+    load_automated_gate_inputs_from_endpoint,
     passes_regression_gate,
 )
+from indian_stock_llm.knowledge_base import HttpEmbeddingProvider, HttpReranker
 from indian_stock_llm.monitoring import evaluate_sre_readiness
 from indian_stock_llm.knowledge_base import KnowledgeBase
+from indian_stock_llm.model_serving import HttpModelBackend
 from indian_stock_llm.query_engine import StockMarketAssistant
 from indian_stock_llm.release_manager import ReleaseRegistry
 from indian_stock_llm.serving import ChatService
@@ -253,3 +257,223 @@ def test_sre_readiness_alerts_triggered() -> None:
     )
     assert assessment["ready"] is False
     assert "latency.p95_exceeded" in assessment["alerts"]
+
+
+def test_runtime_config_reads_managed_provider_and_rollout_ingestion_settings(monkeypatch) -> None:
+    monkeypatch.setenv("ISM_EMBEDDING_PROVIDER", "openai")
+    monkeypatch.setenv("ISM_EMBEDDING_MODEL", "text-embedding-3-small")
+    monkeypatch.setenv("ISM_RERANKER_PROVIDER", "cohere")
+    monkeypatch.setenv("ISM_RERANKER_MODEL", "rerank-v3.5")
+    monkeypatch.setenv("ISM_MODEL_PROVIDER", "openai")
+    monkeypatch.setenv("ISM_MODEL_NAME", "gpt-4o-mini")
+    monkeypatch.setenv("ISM_ROLLOUT_INPUTS_ENDPOINT", "https://example.invalid/gate")
+    monkeypatch.setenv("ISM_ROLLOUT_INPUTS_API_KEY", "key")
+    config = runtime_config_from_env()
+    assert config.embedding_provider == "openai"
+    assert config.embedding_model == "text-embedding-3-small"
+    assert config.reranker_provider == "cohere"
+    assert config.reranker_model == "rerank-v3.5"
+    assert config.model_provider == "openai"
+    assert config.model_name == "gpt-4o-mini"
+    assert config.rollout_inputs_endpoint == "https://example.invalid/gate"
+    assert config.rollout_inputs_api_key == "key"
+
+
+def test_load_automated_gate_inputs_from_endpoint(monkeypatch) -> None:
+    payload = {
+        "benchmark": {
+            "fact_accuracy": 0.9,
+            "calculation_correctness": 0.92,
+            "groundedness": 0.9,
+            "hallucination_rate": 0.04,
+            "safety_score": 0.99,
+            "routing_accuracy": 0.9,
+        },
+        "online": {
+            "uptime": 0.999,
+            "avg_latency_ms": 420,
+            "cost_per_query": 0.01,
+            "blocked_ratio": 0.05,
+            "cache_hit_rate": 0.3,
+            "failure_rate": 0.01,
+        },
+        "regression": {
+            "factuality_drop": 0.01,
+            "routing_drop": 0.01,
+            "safety_drop": 0.01,
+        },
+        "source": "nightly-benchmark",
+        "ingested_at": "2099-01-01T00:00:00Z",
+    }
+
+    class StubResponse:
+        def __init__(self, body: dict) -> None:
+            self._body = body
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self) -> bytes:
+            return json.dumps(self._body).encode("utf-8")
+
+    def fake_urlopen(_req, timeout):
+        _ = timeout
+        return StubResponse(payload)
+
+    monkeypatch.setattr(request, "urlopen", fake_urlopen)
+    loaded = load_automated_gate_inputs_from_endpoint("https://example.invalid/gate", max_age_minutes=10_000_000)
+    assert loaded.source == "nightly-benchmark"
+    assert loaded.online.avg_latency_ms == 420
+
+
+def test_rollout_automation_from_endpoint_promotes_on_success(tmp_path: Path, monkeypatch) -> None:
+    payload = {
+        "benchmark": {
+            "fact_accuracy": 0.91,
+            "calculation_correctness": 0.92,
+            "groundedness": 0.9,
+            "hallucination_rate": 0.05,
+            "safety_score": 0.99,
+            "routing_accuracy": 0.9,
+        },
+        "online": {
+            "uptime": 0.999,
+            "avg_latency_ms": 410,
+            "cost_per_query": 0.01,
+            "blocked_ratio": 0.05,
+            "cache_hit_rate": 0.3,
+            "failure_rate": 0.01,
+        },
+        "regression": {
+            "factuality_drop": 0.01,
+            "routing_drop": 0.01,
+            "safety_drop": 0.01,
+        },
+        "source": "nightly-benchmark",
+        "ingested_at": "2099-01-01T00:00:00Z",
+    }
+
+    class StubResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self) -> bytes:
+            return json.dumps(payload).encode("utf-8")
+
+    monkeypatch.setattr(request, "urlopen", lambda _req, timeout: StubResponse())
+    from indian_stock_llm.acceptance import ProductionAcceptanceCriteria
+
+    registry = ReleaseRegistry(tmp_path / "registry.json")
+    result = registry.automate_rollout_from_endpoint(
+        version="v2",
+        notes="remote gate ingestion",
+        endpoint="https://example.invalid/gate",
+        criteria=ProductionAcceptanceCriteria(),
+        rollback_rate=0.01,
+        canary_error_rate=0.01,
+        auto_promote=True,
+    )
+    assert result.promoted is True
+
+
+def test_chat_service_emits_and_clears_slo_alerts() -> None:
+    class SimpleAssistant:
+        def query(self, _query: str) -> dict:
+            return {
+                "intent": "general_query",
+                "answer": "ok",
+                "confidence": 0.5,
+                "citations": [],
+                "disclaimer": "Informational only.",
+                "safe_for_trading_advice": False,
+            }
+
+    class SpyMonitoringBackend:
+        def __init__(self) -> None:
+            self.events: list[str] = []
+            self.payloads: list[dict[str, str | float | bool]] = []
+
+        def emit_metrics(self, metrics: dict[str, float | bool]) -> None:
+            _ = metrics
+
+        def emit_event(self, event: str, payload: dict[str, str | float | bool]) -> None:
+            self.events.append(event)
+            self.payloads.append(payload)
+
+    monitoring = SpyMonitoringBackend()
+    service = ChatService(assistant=SimpleAssistant(), monitoring_backend=monitoring)
+    service.metrics.total_requests = 1
+    service.metrics.latency_samples_ms = [1300.0, 2500.0]
+    service.metrics.failures = 1
+    service._emit_metrics()
+    assert "slo.alert" in monitoring.events
+    service.metrics.latency_samples_ms = [100.0]
+    service.metrics.failures = 0
+    service._emit_metrics()
+    assert "slo.alert_cleared" in monitoring.events
+
+
+def test_managed_provider_payloads_for_embedding_reranker_and_model(monkeypatch) -> None:
+    responses = [
+        {"data": [{"embedding": [0.1, 0.2]}]},
+        {"results": [{"index": 1, "relevance_score": 0.9}, {"index": 0, "relevance_score": 0.1}]},
+        {"choices": [{"message": {"content": "managed answer"}}]},
+    ]
+
+    class StubResponse:
+        def __init__(self, body: dict) -> None:
+            self.body = body
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self) -> bytes:
+            return json.dumps(self.body).encode("utf-8")
+
+    recorded: list[dict] = []
+
+    def fake_urlopen(req, timeout):
+        _ = timeout
+        body = json.loads(req.data.decode("utf-8"))
+        recorded.append(body)
+        return StubResponse(responses[len(recorded) - 1])
+
+    monkeypatch.setattr(request, "urlopen", fake_urlopen)
+    embeddings = HttpEmbeddingProvider(
+        endpoint="https://example.invalid/embeddings",
+        api_key="k",
+        provider="openai",
+        model="text-embedding-3-small",
+    ).encode(["hello"])
+    assert embeddings == [(0.1, 0.2)]
+    repo_root = Path(__file__).resolve().parents[1]
+    kb = KnowledgeBase.from_json(repo_root / "data" / "sample_knowledge.json")
+    scored_items = [
+        (kb.items[0], 0.2, 0, 0.1),
+        (kb.items[1], 0.3, 0, 0.2),
+    ]
+    reranked = HttpReranker(endpoint="https://example.invalid/rerank", api_key="k", provider="cohere").rerank(
+        query="risk",
+        intent="prediction",
+        scored_items=scored_items,
+    )
+    assert reranked[0][0].id == scored_items[1][0].id
+    output = HttpModelBackend(
+        endpoint="https://example.invalid/chat",
+        api_key="k",
+        provider="openai",
+        model="gpt-4o-mini",
+    ).generate("hello", timeout_seconds=1.0)
+    assert output.answer == "managed answer"
+    assert recorded[0]["model"] == "text-embedding-3-small"
+    assert "documents" in recorded[1]
+    assert recorded[2]["model"] == "gpt-4o-mini"

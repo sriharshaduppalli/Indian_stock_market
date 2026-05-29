@@ -20,8 +20,10 @@
 - Monitor canary error rate before full rollout.
 - Promote to GA only when canary and release gates pass.
 - Roll back to `rollback_target` when rollout criteria fail.
+- For automated external benchmark/canary ingestion, use `automate_rollout_from_endpoint` with endpoint/API key inputs.
 
 ## Incident and recovery
 - Use service metrics + policy logs for incident triage.
 - Keep release registry history current for rollback decisions.
 - Validate data-source fallback behavior during failover drills.
+- Route `slo.alert`/`slo.alert_cleared` monitoring events to on-call dashboards.
