@@ -177,6 +177,8 @@ class StockMarketAssistant:
                 f"Latency mode: {self.config.latency_mode}.\n"
                 f"Data refresh timestamp: {self.data_layer.snapshot.refreshed_at}.\n"
                 f"Data lineage verified: {self.data_layer.validate_snapshot()}.\n"
+                f"Stale feeds: {self.data_layer.snapshot.stale_feeds or ('none',)}.\n"
+                f"Partial feeds: {self.data_layer.snapshot.partial_feeds or ('none',)}.\n"
                 f"Source hierarchy: {', '.join(self.data_layer.snapshot.source_hierarchy)}.\n"
                 f"Resolved entity: {resolved_entity if resolved_entity else 'None'}.\n"
                 f"{live_factor_note}"
@@ -218,6 +220,8 @@ class StockMarketAssistant:
 
     def query(self, query: str) -> dict[str, Any]:
         response = self.ask(query)
+        feedback_metrics = self.learning_manager.feedback_metrics()
+        safety_metrics = self.safety_policy.audit_summary()
         return {
             "intent": response.intent,
             "answer": response.answer,
@@ -233,5 +237,14 @@ class StockMarketAssistant:
                 "min_uptime": self.criteria.min_uptime,
                 "max_cost_per_query": self.criteria.max_cost_per_query,
                 "safety_compliance_min": self.criteria.safety_compliance_min,
+            },
+            "monitoring": {
+                **feedback_metrics,
+                **safety_metrics,
+            },
+            "data_integrity": {
+                "stale_feeds": list(self.data_layer.snapshot.stale_feeds),
+                "partial_feeds": list(self.data_layer.snapshot.partial_feeds),
+                "connector_status": self.data_layer.snapshot.connector_status,
             },
         }

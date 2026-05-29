@@ -46,3 +46,27 @@ class ContinualLearningManager:
         payload = {"ts": ts, "intent": intent, "query_hash": self.anonymize_query(query)}
         with self.feedback_log_path.open("a", encoding="utf-8") as fp:
             fp.write(json.dumps(payload, ensure_ascii=False) + "\n")
+
+    def feedback_metrics(self) -> dict[str, float]:
+        if self.feedback_log_path is None or not self.feedback_log_path.exists():
+            return {
+                "feedback_samples": 0.0,
+                "anonymized_samples": 0.0,
+                "anonymized_ratio": 0.0,
+            }
+        total = 0
+        anonymized = 0
+        with self.feedback_log_path.open("r", encoding="utf-8") as fp:
+            for line in fp:
+                text = line.strip()
+                if not text:
+                    continue
+                total += 1
+                if text.startswith("{") and "query_hash" in text:
+                    anonymized += 1
+        ratio = (anonymized / total) if total else 0.0
+        return {
+            "feedback_samples": float(total),
+            "anonymized_samples": float(anonymized),
+            "anonymized_ratio": ratio,
+        }

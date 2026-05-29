@@ -15,6 +15,10 @@ class ServiceMetrics:
     total_requests: int = 0
     cache_hits: int = 0
     failures: int = 0
+    failed_responses: int = 0
+    rate_limited: int = 0
+    degraded: int = 0
+    safety_blocks: int = 0
     total_latency_ms: float = 0.0
 
     @property
@@ -52,6 +56,7 @@ class ChatService:
 
     def query(self, user_query: str) -> dict:
         if not self._allow_request():
+            self.metrics.rate_limited += 1
             return {"status": "rate_limited", "response": self._fallback_response("Rate limit exceeded")}
         if user_query in self._cache:
             self.metrics.cache_hits += 1
@@ -59,6 +64,7 @@ class ChatService:
         if self._circuit_open:
             now = datetime.now(timezone.utc)
             if self._circuit_opened_at and now - self._circuit_opened_at < timedelta(seconds=self.circuit_cooldown_seconds):
+                self.metrics.degraded += 1
                 return {"status": "degraded", "response": self._fallback_response("Service temporarily degraded")}
             self._circuit_open = False
             self._circuit_opened_at = None
@@ -71,6 +77,8 @@ class ChatService:
                 payload = self.assistant.query(user_query)
                 self._cache[user_query] = payload
                 self._consecutive_failures = 0
+                if payload.get("policy_reason", "").lower().startswith(("prompt-injection", "prohibited")):
+                    self.metrics.safety_blocks += 1
                 self.metrics.total_latency_ms += (perf_counter() - start) * 1000
                 return {"status": "ok", "response": payload, "cached": False}
             except Exception as exc:
@@ -81,6 +89,7 @@ class ChatService:
             self._circuit_open = True
             self._circuit_opened_at = datetime.now(timezone.utc)
         self.metrics.failures += 1
+        self.metrics.failed_responses += 1
         if last_error:
             LOGGER.error("ChatService request failed after retries: %s", last_error)
         return {"status": "failed", "response": self._fallback_response("Unable to process query safely")}
@@ -94,4 +103,20 @@ class ChatService:
             "citations": [],
             "disclaimer": "Informational only.",
             "safe_for_trading_advice": False,
+        }
+
+    def export_metrics(self) -> dict[str, float | bool]:
+        total = self.metrics.total_requests
+        failure_rate = (self.metrics.failures / total) if total else 0.0
+        cache_hit_rate = (self.metrics.cache_hits / total) if total else 0.0
+        return {
+            "total_requests": float(total),
+            "avg_latency_ms": self.metrics.avg_latency_ms,
+            "failure_rate": failure_rate,
+            "cache_hit_rate": cache_hit_rate,
+            "failed_responses": float(self.metrics.failed_responses),
+            "rate_limited": float(self.metrics.rate_limited),
+            "degraded": float(self.metrics.degraded),
+            "safety_blocks": float(self.metrics.safety_blocks),
+            "circuit_open": self._circuit_open,
         }

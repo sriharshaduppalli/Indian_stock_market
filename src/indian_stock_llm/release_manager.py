@@ -5,12 +5,21 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
+from .evaluation import ReleaseGateReport
+
 
 @dataclass(frozen=True)
 class ReleaseVersion:
     version: str
     created_at: str
     notes: str
+
+
+@dataclass(frozen=True)
+class RolloutDecision:
+    approved: bool
+    rollback_target: str | None
+    reason: str
 
 
 class ReleaseRegistry:
@@ -41,3 +50,17 @@ class ReleaseRegistry:
             return None
         return entries[-2]["version"]
 
+    def assess_rollout(self, gate_report: ReleaseGateReport, rollback_rate: float, max_rollback_rate: float = 0.1) -> RolloutDecision:
+        if not gate_report.passed:
+            return RolloutDecision(
+                approved=False,
+                rollback_target=self.rollback_target(),
+                reason=f"release gate failed: {', '.join(gate_report.reasons) or 'unknown reason'}",
+            )
+        if rollback_rate > max_rollback_rate:
+            return RolloutDecision(
+                approved=False,
+                rollback_target=self.rollback_target(),
+                reason="rollback-rate threshold exceeded",
+            )
+        return RolloutDecision(approved=True, rollback_target=None, reason="rollout criteria satisfied")

@@ -40,3 +40,18 @@ class SafetyPolicy:
         with self.audit_log_path.open("a", encoding="utf-8") as fp:
             fp.write(f"{ts}\tallowed={decision.allowed}\treason={decision.reason}\tquery={query.strip()}\n")
 
+    def audit_summary(self) -> dict[str, float]:
+        if self.audit_log_path is None or not self.audit_log_path.exists():
+            return {"policy_events": 0.0, "blocked_events": 0.0, "blocked_ratio": 0.0}
+        total = 0
+        blocked = 0
+        with self.audit_log_path.open("r", encoding="utf-8") as fp:
+            for line in fp:
+                text = line.strip()
+                if not text:
+                    continue
+                total += 1
+                if "allowed=False" in text:
+                    blocked += 1
+        ratio = (blocked / total) if total else 0.0
+        return {"policy_events": float(total), "blocked_events": float(blocked), "blocked_ratio": ratio}
