@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 from .config import AssistantConfig, default_config
@@ -21,19 +22,26 @@ class StockMarketAssistant:
 
     def classify_intent(self, query: str) -> str:
         q = query.lower()
-        if any(word in q for word in ["price", "target", "entry", "exit"]):
+        tokens = {m.group(0) for m in re.finditer(r"[a-z0-9]+", q)}
+        if any(word in tokens for word in ["price", "target", "entry", "exit"]):
             return "price_action"
-        if any(word in q for word in ["pe", "valuation", "fundamental", "balance sheet", "profit"]):
+        if "balance sheet" in q or any(
+            word in tokens for word in ["pe", "valuation", "fundamental", "fundamentals", "profit", "profits"]
+        ):
             return "fundamentals"
-        if any(word in q for word in ["news", "event", "result", "quarter", "guidance"]):
+        if any(word in tokens for word in ["news", "event", "result", "results", "quarter", "guidance"]):
             return "events_news"
-        if any(word in q for word in ["portfolio", "allocation", "risk", "diversification"]):
+        if any(word in tokens for word in ["portfolio", "allocation", "risk", "diversification"]):
             return "portfolio"
         return "general_query"
 
     def ask(self, query: str) -> AssistantResponse:
         intent = self.classify_intent(query)
-        context_items = self.knowledge_base.search(query, top_k=self.config.top_k_context)
+        context_items = self.knowledge_base.search(
+            query,
+            top_k=self.config.top_k_context,
+            min_score=self.config.min_retrieval_score,
+        )
 
         if context_items:
             context_text = "\n".join(

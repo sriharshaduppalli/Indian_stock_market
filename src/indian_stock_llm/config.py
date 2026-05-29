@@ -10,6 +10,7 @@ class AssistantConfig:
 
     knowledge_base_path: Path
     top_k_context: int = 3
+    min_retrieval_score: float = 2.0
 
 
 def default_config() -> AssistantConfig:

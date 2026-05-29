@@ -3,7 +3,7 @@
 Indian stock market data, analysis, prompts, queries, and LLM model scaffold.
 
 ## What is implemented
-- High-level architecture in `/tmp/workspace/sriharshaduppalli/Indian_stock_market/ARCHITECTURE.md`
+- High-level architecture in `ARCHITECTURE.md`
 - Initial local assistant scaffold for Indian stock market Q&A:
   - Intent classification
   - Domain knowledge retrieval
