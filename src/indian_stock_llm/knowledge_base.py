@@ -139,7 +139,8 @@ class KnowledgeBase:
             rerank_score = score + self._intent_boost(intent, item)
             if query_tokens and query_tokens <= item_tokens:
                 rerank_score += 0.3
-            if score >= min_score:
+            has_signal = keyword_score > 0 or semantic_score >= min_score or embedding_score >= 0.55
+            if has_signal and score >= min_score:
                 scored.append((rerank_score, item))
 
         scored.sort(key=lambda x: x[0], reverse=True)
