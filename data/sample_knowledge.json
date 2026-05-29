@@ -1,0 +1,30 @@
+[
+  {
+    "id": "k1",
+    "title": "Banking sector sensitivity",
+    "content": "Private banks in India are often sensitive to RBI policy rate changes, credit growth trends, and net interest margin compression risks.",
+    "tags": ["banking", "rbi", "nifty bank"],
+    "source": "domain_seed_v1"
+  },
+  {
+    "id": "k2",
+    "title": "IT services earnings drivers",
+    "content": "Indian IT companies are influenced by US demand trends, deal wins, attrition changes, and margin guidance commentary.",
+    "tags": ["it", "earnings", "guidance"],
+    "source": "domain_seed_v1"
+  },
+  {
+    "id": "k3",
+    "title": "Valuation interpretation",
+    "content": "P/E should be interpreted with growth durability, return on capital, and sector cycle context instead of in isolation.",
+    "tags": ["valuation", "pe", "fundamentals"],
+    "source": "domain_seed_v1"
+  },
+  {
+    "id": "k4",
+    "title": "Portfolio risk basics",
+    "content": "Concentration in a single sector increases drawdown risk; diversification across sectors and market caps can reduce volatility.",
+    "tags": ["portfolio", "risk", "diversification"],
+    "source": "domain_seed_v1"
+  }
+]
