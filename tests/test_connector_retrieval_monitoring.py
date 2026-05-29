@@ -8,12 +8,15 @@ from indian_stock_llm.config import runtime_config_from_env
 from indian_stock_llm.connectors import HttpJsonProviderConnector
 from indian_stock_llm.data_layer import EnterpriseDataLayer
 from indian_stock_llm.evaluation import (
+    AutomatedGateInputs,
     BenchmarkResult,
     OnlineFeedbackMetrics,
     RegressionMetrics,
     evaluate_release_gate,
+    load_automated_gate_inputs,
     passes_regression_gate,
 )
+from indian_stock_llm.monitoring import evaluate_sre_readiness
 from indian_stock_llm.knowledge_base import KnowledgeBase
 from indian_stock_llm.query_engine import StockMarketAssistant
 from indian_stock_llm.release_manager import ReleaseRegistry
@@ -203,3 +206,50 @@ def test_rollout_automation_promotes_on_success(tmp_path: Path) -> None:
     )
     assert result.promoted is True
     assert registry.rollback_target() is None
+
+
+def test_automated_gate_input_loader(tmp_path: Path) -> None:
+    payload = {
+        "benchmark": {
+            "fact_accuracy": 0.9,
+            "calculation_correctness": 0.92,
+            "groundedness": 0.9,
+            "hallucination_rate": 0.04,
+            "safety_score": 0.99,
+            "routing_accuracy": 0.9,
+        },
+        "online": {
+            "uptime": 0.999,
+            "avg_latency_ms": 420,
+            "cost_per_query": 0.01,
+            "blocked_ratio": 0.05,
+            "cache_hit_rate": 0.3,
+            "failure_rate": 0.01,
+        },
+        "regression": {
+            "factuality_drop": 0.01,
+            "routing_drop": 0.01,
+            "safety_drop": 0.01,
+        },
+        "source": "nightly-benchmark",
+        "ingested_at": "2099-01-01T00:00:00Z",
+    }
+    path = tmp_path / "inputs.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    loaded = load_automated_gate_inputs(path, max_age_minutes=10_000_000)
+    assert isinstance(loaded, AutomatedGateInputs)
+    assert loaded.source == "nightly-benchmark"
+    assert loaded.benchmark.fact_accuracy == 0.9
+
+
+def test_sre_readiness_alerts_triggered() -> None:
+    assessment = evaluate_sre_readiness(
+        {
+            "p95_latency_ms": 1300.0,
+            "p99_latency_ms": 2500.0,
+            "failure_rate": 0.2,
+            "error_budget_remaining": 0.1,
+        }
+    )
+    assert assessment["ready"] is False
+    assert "latency.p95_exceeded" in assessment["alerts"]

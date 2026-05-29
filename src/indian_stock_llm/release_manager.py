@@ -6,7 +6,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .evaluation import ReleaseGateReport
-from .evaluation import RegressionMetrics, passes_regression_gate
+from .evaluation import RegressionMetrics, evaluate_release_gate, load_automated_gate_inputs, passes_regression_gate
+from .acceptance import ProductionAcceptanceCriteria
 
 
 @dataclass(frozen=True)
@@ -150,4 +151,36 @@ class ReleaseRegistry:
             rollout=rollout,
             regression_passed=regression_passed,
             promoted=promoted,
+        )
+
+    def automate_rollout_from_inputs(
+        self,
+        *,
+        version: str,
+        notes: str,
+        input_path: Path,
+        criteria: ProductionAcceptanceCriteria,
+        rollback_rate: float,
+        canary_error_rate: float,
+        max_age_minutes: int = 30,
+        max_canary_error_rate: float = 0.05,
+        max_rollback_rate: float = 0.1,
+        auto_promote: bool = False,
+    ) -> RolloutAutomationResult:
+        gate_inputs = load_automated_gate_inputs(input_path, max_age_minutes=max_age_minutes)
+        gate_report = evaluate_release_gate(
+            benchmark=gate_inputs.benchmark,
+            online=gate_inputs.online,
+            criteria=criteria,
+        )
+        return self.automate_rollout(
+            version=version,
+            notes=notes,
+            gate_report=gate_report,
+            regression=gate_inputs.regression,
+            rollback_rate=rollback_rate,
+            canary_error_rate=canary_error_rate,
+            max_canary_error_rate=max_canary_error_rate,
+            max_rollback_rate=max_rollback_rate,
+            auto_promote=auto_promote,
         )

@@ -7,7 +7,7 @@ from indian_stock_llm.data_layer import EnterpriseDataLayer
 from indian_stock_llm.evaluation import BenchmarkResult, passes_release_gate
 from indian_stock_llm.query_engine import StockMarketAssistant
 from indian_stock_llm.release_manager import ReleaseRegistry
-from indian_stock_llm.serving import ChatService
+from indian_stock_llm.serving import ChatService, TenantPolicy
 
 
 def _config(tmp_path: Path) -> AssistantConfig:
@@ -161,3 +161,44 @@ def test_cache_entry_expires_when_ttl_elapsed() -> None:
     assert second["status"] == "ok"
     assert second["cached"] is False
     assert assistant.calls == 2
+
+
+def test_rotated_api_keys_are_accepted() -> None:
+    class SimpleAssistant:
+        def query(self, _query: str) -> dict:
+            return {
+                "intent": "general_query",
+                "answer": "ok",
+                "confidence": 0.5,
+                "citations": [],
+                "disclaimer": "Informational only.",
+                "safe_for_trading_advice": False,
+            }
+
+    service = ChatService(assistant=SimpleAssistant(), tenant_api_keys={"tenant-a": ["old-key", "new-key"]})
+    assert service.query("hello", tenant_id="tenant-a", api_key="old-key")["status"] == "ok"
+    assert service.query("hello", tenant_id="tenant-a", api_key="new-key")["status"] == "ok"
+
+
+def test_tenant_policy_enforces_custom_limit() -> None:
+    class SimpleAssistant:
+        def query(self, _query: str) -> dict:
+            return {
+                "intent": "general_query",
+                "answer": "ok",
+                "confidence": 0.5,
+                "citations": [],
+                "disclaimer": "Informational only.",
+                "safe_for_trading_advice": False,
+            }
+
+    service = ChatService(
+        assistant=SimpleAssistant(),
+        rate_limit_per_minute=10,
+        tenant_api_keys={"tenant-a": "secret"},
+        tenant_policies={"tenant-a": TenantPolicy(rate_limit_per_minute=1)},
+    )
+    first = service.query("q1", tenant_id="tenant-a", api_key="secret")
+    second = service.query("q2", tenant_id="tenant-a", api_key="secret")
+    assert first["status"] == "ok"
+    assert second["status"] == "rate_limited"

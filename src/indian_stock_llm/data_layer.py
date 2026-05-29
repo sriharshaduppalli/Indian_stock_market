@@ -4,6 +4,8 @@ import json
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from queue import Empty, Queue
+from threading import Event, Thread
 
 from .connectors import SourceConnector, default_connectors
 from .config import AssistantConfig
@@ -52,6 +54,9 @@ class EnterpriseDataLayer:
             "news_events_secondary",
         )
         self.connectors: tuple[SourceConnector, ...] = connectors or default_connectors(self.config)
+        self._refresh_stop_event: Event | None = None
+        self._refresh_worker: Thread | None = None
+        self._refresh_errors: Queue[str] = Queue(maxsize=64)
         self._snapshot = self.refresh_daily()
 
     def _read_json_list(self, path: Path) -> list[dict]:
@@ -214,3 +219,38 @@ class EnterpriseDataLayer:
             lineage_ok=lineage_ok,
             fallback_mode=fallback_mode,
         )
+
+    def start_background_refresh(self, interval_seconds: float = 300.0) -> None:
+        if self._refresh_worker and self._refresh_worker.is_alive():
+            return
+        self._refresh_stop_event = Event()
+
+        def _loop() -> None:
+            while self._refresh_stop_event and not self._refresh_stop_event.wait(interval_seconds):
+                try:
+                    self.refresh_daily()
+                except Exception as exc:
+                    try:
+                        self._refresh_errors.put_nowait(str(exc))
+                    except Exception:
+                        pass
+
+        self._refresh_worker = Thread(target=_loop, daemon=True)
+        self._refresh_worker.start()
+
+    def stop_background_refresh(self, timeout_seconds: float = 1.0) -> None:
+        if self._refresh_stop_event is None or self._refresh_worker is None:
+            return
+        self._refresh_stop_event.set()
+        self._refresh_worker.join(timeout=timeout_seconds)
+        self._refresh_stop_event = None
+        self._refresh_worker = None
+
+    def background_refresh_errors(self) -> tuple[str, ...]:
+        errors: list[str] = []
+        while True:
+            try:
+                errors.append(self._refresh_errors.get_nowait())
+            except Empty:
+                break
+        return tuple(errors)

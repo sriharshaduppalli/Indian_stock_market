@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+import json
+from pathlib import Path
 
 from .acceptance import ProductionAcceptanceCriteria
 
@@ -41,6 +44,49 @@ class ReleaseGateReport:
     @property
     def passed(self) -> bool:
         return self.benchmark_passed and self.online_passed
+
+
+@dataclass(frozen=True)
+class AutomatedGateInputs:
+    benchmark: BenchmarkResult
+    online: OnlineFeedbackMetrics
+    regression: RegressionMetrics
+    source: str
+    ingested_at: str
+
+
+def _parse_iso_utc(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    text = value.strip()
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
+def load_automated_gate_inputs(path: Path, max_age_minutes: int = 30) -> AutomatedGateInputs:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    benchmark = BenchmarkResult(**payload["benchmark"])
+    online = OnlineFeedbackMetrics(**payload["online"])
+    regression = RegressionMetrics(**payload.get("regression", {}))
+    ingested_at = str(payload.get("ingested_at", ""))
+    timestamp = _parse_iso_utc(ingested_at) or datetime.now(timezone.utc)
+    age = datetime.now(timezone.utc) - timestamp
+    if age > timedelta(minutes=max_age_minutes):
+        raise ValueError("automated gate input is stale")
+    return AutomatedGateInputs(
+        benchmark=benchmark,
+        online=online,
+        regression=regression,
+        source=str(payload.get("source", "unknown")),
+        ingested_at=timestamp.isoformat(),
+    )
 
 
 def passes_release_gate(result: BenchmarkResult, criteria: ProductionAcceptanceCriteria) -> bool:

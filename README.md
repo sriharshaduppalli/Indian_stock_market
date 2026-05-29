@@ -28,6 +28,10 @@ Indian stock market data, analysis, prompts, queries, and LLM model scaffold wit
   - Pluggable monitoring backend integration (none/logging/http)
   - Environment-driven runtime/deployment config overrides
   - Automated canary + regression + rollout promotion flow
+  - Pluggable embedding/reranker/model endpoints with fallback orchestration
+  - Async monitoring + feedback logging path and optional background data refresh
+  - Distributed-ready cache/rate-limit state backend and tenant key rotation support
+  - SRE readiness primitives (p95/p99 latency, error budget signals, runbook mapping)
 
   ## Production scope and SLOs
   - Allowed use cases: grounded Q&A and risk-aware guidance
@@ -59,9 +63,9 @@ Indian stock market data, analysis, prompts, queries, and LLM model scaffold wit
    ```
 
 ## Next steps for production-grade accuracy
-- Upgrade semantic retrieval to embedding + reranking stack
-- Fine-tune base LLM with broader Indian market supervision data
-- Integrate offline+online evaluation for continuous improvement rollouts
+- Connect managed embedding/reranker/model providers for full production inference quality
+- Enable automated benchmark/canary ingestion jobs feeding `ReleaseRegistry.automate_rollout_from_inputs`
+- Wire dashboards/alerts to `p95_latency_ms`, `p99_latency_ms`, and `error_budget_remaining`
 
 ## Integration contract for external chat boxes
 - Use `ChatService` with tenant registration (`register_tenant`) to enforce per-tenant API keys.

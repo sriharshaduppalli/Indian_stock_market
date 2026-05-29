@@ -43,6 +43,15 @@ class AssistantConfig:
     monitoring_backend: str = "none"
     monitoring_endpoint: str | None = None
     monitoring_api_key: str | None = None
+    embedding_endpoint: str | None = None
+    embedding_api_key: str | None = None
+    reranker_endpoint: str | None = None
+    reranker_api_key: str | None = None
+    model_endpoint: str | None = None
+    model_api_key: str | None = None
+    model_timeout_seconds: float = 2.5
+    background_refresh_enabled: bool = False
+    background_refresh_interval_seconds: float = 300.0
     rollout_auto_promote: bool = False
     rollout_max_canary_error_rate: float = 0.05
     rollout_max_rollback_rate: float = 0.1
@@ -109,8 +118,20 @@ def runtime_config_from_env(base: AssistantConfig | None = None) -> AssistantCon
             "monitoring_backend": os.getenv("ISM_MONITORING_BACKEND", config.monitoring_backend),
             "monitoring_endpoint": os.getenv("ISM_MONITORING_ENDPOINT", config.monitoring_endpoint),
             "monitoring_api_key": os.getenv("ISM_MONITORING_API_KEY", config.monitoring_api_key),
+            "embedding_endpoint": os.getenv("ISM_EMBEDDING_ENDPOINT", config.embedding_endpoint),
+            "embedding_api_key": os.getenv("ISM_EMBEDDING_API_KEY", config.embedding_api_key),
+            "reranker_endpoint": os.getenv("ISM_RERANKER_ENDPOINT", config.reranker_endpoint),
+            "reranker_api_key": os.getenv("ISM_RERANKER_API_KEY", config.reranker_api_key),
+            "model_endpoint": os.getenv("ISM_MODEL_ENDPOINT", config.model_endpoint),
+            "model_api_key": os.getenv("ISM_MODEL_API_KEY", config.model_api_key),
             "connector_timeout_seconds": _env_float("ISM_CONNECTOR_TIMEOUT_SECONDS", config.connector_timeout_seconds),
             "connector_retries": _env_int("ISM_CONNECTOR_RETRIES", config.connector_retries),
+            "model_timeout_seconds": _env_float("ISM_MODEL_TIMEOUT_SECONDS", config.model_timeout_seconds),
+            "background_refresh_enabled": _env_bool("ISM_BACKGROUND_REFRESH_ENABLED", config.background_refresh_enabled),
+            "background_refresh_interval_seconds": _env_float(
+                "ISM_BACKGROUND_REFRESH_INTERVAL_SECONDS",
+                config.background_refresh_interval_seconds,
+            ),
             "max_data_staleness_hours": _env_int("ISM_MAX_DATA_STALENESS_HOURS", config.max_data_staleness_hours),
             "max_latency_ms": _env_int("ISM_MAX_LATENCY_MS", config.max_latency_ms),
             "min_uptime": _env_float("ISM_MIN_UPTIME", config.min_uptime),

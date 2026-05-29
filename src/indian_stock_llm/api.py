@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
+import os
+from pathlib import Path
 
 from .acceptance import API_CONTRACT_VERSION
 from .config import AssistantConfig
 from .monitoring import monitoring_backend_from_config
 from .query_engine import StockMarketAssistant
-from .serving import ChatService
+from .serving import ChatService, FileStateBackend, TenantPolicy
 
 
 @dataclass(frozen=True)
@@ -38,7 +41,8 @@ class ChatApi:
 def build_chat_api(
     config: AssistantConfig,
     *,
-    tenant_api_keys: dict[str, str] | None = None,
+    tenant_api_keys: dict[str, str | list[str]] | None = None,
+    tenant_policies: dict[str, TenantPolicy] | None = None,
 ) -> ChatApi:
     assistant = StockMarketAssistant(config=config)
     monitoring = monitoring_backend_from_config(
@@ -48,7 +52,37 @@ def build_chat_api(
     )
     service = ChatService(
         assistant=assistant,
-        tenant_api_keys=tenant_api_keys,
+        tenant_api_keys=tenant_api_keys or load_tenant_api_keys_from_env(),
+        tenant_policies=tenant_policies,
         monitoring_backend=monitoring,
+        state_backend=state_backend_from_env(),
     )
     return ChatApi(service)
+
+
+def load_tenant_api_keys_from_env(env_var: str = "ISM_TENANT_API_KEYS_JSON") -> dict[str, str | list[str]]:
+    raw = os.getenv(env_var, "").strip()
+    if not raw:
+        return {}
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        return {}
+    if not isinstance(payload, dict):
+        return {}
+    keys: dict[str, str | list[str]] = {}
+    for tenant_id, value in payload.items():
+        if isinstance(value, str) and value:
+            keys[str(tenant_id)] = value
+        elif isinstance(value, list):
+            selected = [item for item in value if isinstance(item, str) and item]
+            if selected:
+                keys[str(tenant_id)] = selected
+    return keys
+
+
+def state_backend_from_env(env_var: str = "ISM_STATE_BACKEND_FILE") -> FileStateBackend | None:
+    raw = os.getenv(env_var, "").strip()
+    if not raw:
+        return None
+    return FileStateBackend(Path(raw))
