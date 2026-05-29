@@ -24,6 +24,10 @@ Indian stock market data, analysis, prompts, queries, and LLM model scaffold wit
   - Frozen integration contract (`v1`) via `ChatApi`
   - Tenant-aware auth + rate limiting in serving layer
   - Data readiness release blockers for stale/partial/incomplete source states
+  - Live connector mode for NSE/BSE/regulatory/news datasets via runtime endpoints
+  - Pluggable monitoring backend integration (none/logging/http)
+  - Environment-driven runtime/deployment config overrides
+  - Automated canary + regression + rollout promotion flow
 
   ## Production scope and SLOs
   - Allowed use cases: grounded Q&A and risk-aware guidance
@@ -55,11 +59,9 @@ Indian stock market data, analysis, prompts, queries, and LLM model scaffold wit
    ```
 
 ## Next steps for production-grade accuracy
-- Replace scaffold feeds with live NSE/BSE + filings/news connectors
 - Upgrade semantic retrieval to embedding + reranking stack
 - Fine-tune base LLM with broader Indian market supervision data
 - Integrate offline+online evaluation for continuous improvement rollouts
-- Connect serving metrics/traces to production monitoring backends
 
 ## Integration contract for external chat boxes
 - Use `ChatService` with tenant registration (`register_tenant`) to enforce per-tenant API keys.

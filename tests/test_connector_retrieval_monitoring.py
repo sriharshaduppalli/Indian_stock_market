@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 
 from indian_stock_llm.config import AssistantConfig
+from indian_stock_llm.config import runtime_config_from_env
+from indian_stock_llm.connectors import HttpJsonProviderConnector
 from indian_stock_llm.data_layer import EnterpriseDataLayer
 from indian_stock_llm.evaluation import (
     BenchmarkResult,
@@ -122,3 +124,82 @@ def test_service_exports_failure_modes_and_safety_blocks(tmp_path: Path) -> None
     assert metrics["total_requests"] >= 1
     assert metrics["rate_limited"] >= 1
     assert metrics["safety_blocks"] >= 1
+
+
+def test_live_connector_mode_uses_http_connectors(tmp_path: Path) -> None:
+    config = _config(tmp_path)
+    config = AssistantConfig(
+        **{
+            **config.__dict__,
+            "live_connectors_enabled": True,
+            "nse_connector_url": "https://example.invalid/nse",
+            "bse_connector_url": "https://example.invalid/bse",
+            "regulatory_connector_url": "https://example.invalid/regulatory",
+            "news_connector_url": "https://example.invalid/news",
+        }
+    )
+    layer = EnterpriseDataLayer(config=config)
+    assert any(isinstance(connector, HttpJsonProviderConnector) for connector in layer.connectors)
+
+
+def test_runtime_config_from_env_overrides(monkeypatch) -> None:
+    monkeypatch.setenv("ISM_RUNTIME_ENV", "production")
+    monkeypatch.setenv("ISM_LIVE_CONNECTORS_ENABLED", "true")
+    monkeypatch.setenv("ISM_MONITORING_BACKEND", "http")
+    monkeypatch.setenv("ISM_MONITORING_ENDPOINT", "https://monitoring.example/api/metrics")
+    config = runtime_config_from_env()
+    assert config.runtime_env == "production"
+    assert config.live_connectors_enabled is True
+    assert config.monitoring_backend == "http"
+    assert config.monitoring_endpoint == "https://monitoring.example/api/metrics"
+
+
+def test_monitoring_backend_receives_service_events(tmp_path: Path) -> None:
+    class SpyMonitoringBackend:
+        def __init__(self) -> None:
+            self.events: list[str] = []
+            self.metrics_samples: int = 0
+
+        def emit_metrics(self, metrics: dict[str, float | bool]) -> None:
+            _ = metrics
+            self.metrics_samples += 1
+
+        def emit_event(self, event: str, payload: dict[str, str | float | bool]) -> None:
+            _ = payload
+            self.events.append(event)
+
+    assistant = StockMarketAssistant(config=_config(tmp_path))
+    monitoring = SpyMonitoringBackend()
+    service = ChatService(assistant=assistant, monitoring_backend=monitoring)
+    response = service.query("What is SEBI role in market regulation?")
+    assert response["status"] == "ok"
+    assert "request.ok" in monitoring.events
+    assert monitoring.metrics_samples >= 1
+
+
+def test_rollout_automation_promotes_on_success(tmp_path: Path) -> None:
+    benchmark = BenchmarkResult(0.9, 0.9, 0.9, 0.05, 0.99, 0.9)
+    online = OnlineFeedbackMetrics(
+        uptime=0.999,
+        avg_latency_ms=400,
+        cost_per_query=0.01,
+        blocked_ratio=0.05,
+        cache_hit_rate=0.2,
+        failure_rate=0.02,
+    )
+    from indian_stock_llm.acceptance import ProductionAcceptanceCriteria
+
+    criteria = ProductionAcceptanceCriteria()
+    report = evaluate_release_gate(benchmark, online, criteria)
+    registry = ReleaseRegistry(tmp_path / "registry.json")
+    result = registry.automate_rollout(
+        version="v1",
+        notes="initial production release",
+        gate_report=report,
+        regression=RegressionMetrics(0.01, 0.01, 0.01),
+        rollback_rate=0.01,
+        canary_error_rate=0.01,
+        auto_promote=True,
+    )
+    assert result.promoted is True
+    assert registry.rollback_target() is None

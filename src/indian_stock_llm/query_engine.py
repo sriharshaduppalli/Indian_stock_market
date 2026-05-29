@@ -6,7 +6,7 @@ from typing import Any
 
 from .acceptance import ProductionAcceptanceCriteria, SUPPORTED_QUERY_CATEGORIES
 from .calculations import DeterministicCalculator
-from .config import AssistantConfig, default_config
+from .config import AssistantConfig, default_config, runtime_config_from_env
 from .data_layer import EnterpriseDataLayer
 from .knowledge_base import KnowledgeBase
 from .learning_loop import ContinualLearningManager
@@ -40,7 +40,7 @@ class StockMarketAssistant:
     """A minimal domain assistant scaffold for Indian stocks."""
 
     def __init__(self, config: AssistantConfig | None = None):
-        self.config = config or default_config()
+        self.config = config or runtime_config_from_env(default_config())
         self.criteria = ProductionAcceptanceCriteria(
             max_latency_ms=self.config.max_latency_ms,
             min_uptime=self.config.min_uptime,

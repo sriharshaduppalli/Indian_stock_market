@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .evaluation import ReleaseGateReport
+from .evaluation import RegressionMetrics, passes_regression_gate
 
 
 @dataclass(frozen=True)
@@ -21,6 +22,14 @@ class RolloutDecision:
     rollback_target: str | None
     reason: str
     canary_only: bool = False
+
+
+@dataclass(frozen=True)
+class RolloutAutomationResult:
+    canary: RolloutDecision
+    rollout: RolloutDecision
+    regression_passed: bool
+    promoted: bool
 
 
 class ReleaseRegistry:
@@ -91,4 +100,54 @@ class ReleaseRegistry:
             rollback_target=None,
             reason="canary criteria satisfied",
             canary_only=True,
+        )
+
+    def automate_rollout(
+        self,
+        *,
+        version: str,
+        notes: str,
+        gate_report: ReleaseGateReport,
+        regression: RegressionMetrics,
+        rollback_rate: float,
+        canary_error_rate: float,
+        max_canary_error_rate: float = 0.05,
+        max_rollback_rate: float = 0.1,
+        auto_promote: bool = False,
+    ) -> RolloutAutomationResult:
+        canary = self.assess_canary(
+            gate_report=gate_report,
+            canary_error_rate=canary_error_rate,
+            max_canary_error_rate=max_canary_error_rate,
+        )
+        if not canary.approved:
+            blocked = RolloutDecision(
+                approved=False,
+                rollback_target=self.rollback_target(),
+                reason=f"rollout blocked: {canary.reason}",
+            )
+            return RolloutAutomationResult(canary=canary, rollout=blocked, regression_passed=False, promoted=False)
+
+        regression_passed = passes_regression_gate(regression)
+        if not regression_passed:
+            blocked = RolloutDecision(
+                approved=False,
+                rollback_target=self.rollback_target(),
+                reason="rollout blocked: regression gate failed",
+            )
+            return RolloutAutomationResult(canary=canary, rollout=blocked, regression_passed=False, promoted=False)
+
+        rollout = self.assess_rollout(
+            gate_report=gate_report,
+            rollback_rate=rollback_rate,
+            max_rollback_rate=max_rollback_rate,
+        )
+        promoted = rollout.approved and auto_promote
+        if promoted:
+            self.add_version(version, notes)
+        return RolloutAutomationResult(
+            canary=canary,
+            rollout=rollout,
+            regression_passed=regression_passed,
+            promoted=promoted,
         )

@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 import logging
 from time import perf_counter
 
+from .monitoring import MonitoringBackend, NullMonitoringBackend
 from .query_engine import StockMarketAssistant
 
 LOGGER = logging.getLogger(__name__)
@@ -38,6 +39,7 @@ class ChatService:
         tenant_api_keys: dict[str, str] | None = None,
         cache_ttl_seconds: int = 300,
         max_query_length: int = 2_000,
+        monitoring_backend: MonitoringBackend | None = None,
     ):
         self.assistant = assistant
         self.rate_limit_per_minute = rate_limit_per_minute
@@ -54,6 +56,13 @@ class ChatService:
         self._circuit_opened_at: datetime | None = None
         self._consecutive_failures = 0
         self.metrics = ServiceMetrics()
+        self.monitoring_backend = monitoring_backend or NullMonitoringBackend()
+
+    def _emit_event(self, event: str, payload: dict[str, str | float | bool]) -> None:
+        self.monitoring_backend.emit_event(event, payload)
+
+    def _emit_metrics(self) -> None:
+        self.monitoring_backend.emit_metrics(self.export_metrics())
 
     def _allow_request(self, tenant_id: str) -> bool:
         now = datetime.now(timezone.utc)
@@ -98,22 +107,32 @@ class ChatService:
     def query(self, user_query: str, *, tenant_id: str = "public", api_key: str | None = None) -> dict:
         if not self._valid_query(user_query):
             self.metrics.invalid_requests += 1
+            self._emit_event("request.rejected", {"reason": "bad_request", "tenant_id": tenant_id})
+            self._emit_metrics()
             return {"status": "bad_request", "response": self._fallback_response("Query must be non-empty and within max length")}
         if not self._authenticate(tenant_id, api_key):
             self.metrics.auth_failures += 1
+            self._emit_event("request.rejected", {"reason": "unauthorized", "tenant_id": tenant_id})
+            self._emit_metrics()
             return {"status": "unauthorized", "response": self._fallback_response("Unauthorized tenant access")}
         if not self._allow_request(tenant_id):
             self.metrics.rate_limited += 1
+            self._emit_event("request.rejected", {"reason": "rate_limited", "tenant_id": tenant_id})
+            self._emit_metrics()
             return {"status": "rate_limited", "response": self._fallback_response("Rate limit exceeded")}
         normalized_query = user_query.strip()
         cached_payload = self._get_cached_response(tenant_id, normalized_query)
         if cached_payload is not None:
             self.metrics.cache_hits += 1
+            self._emit_event("request.cached", {"tenant_id": tenant_id})
+            self._emit_metrics()
             return {"status": "ok", "response": cached_payload, "cached": True}
         if self._circuit_open:
             now = datetime.now(timezone.utc)
             if self._circuit_opened_at and now - self._circuit_opened_at < timedelta(seconds=self.circuit_cooldown_seconds):
                 self.metrics.degraded += 1
+                self._emit_event("request.degraded", {"tenant_id": tenant_id})
+                self._emit_metrics()
                 return {"status": "degraded", "response": self._fallback_response("Service temporarily degraded")}
             self._circuit_open = False
             self._circuit_opened_at = None
@@ -131,6 +150,8 @@ class ChatService:
                 if payload.get("policy_reason", "").lower().startswith(("prompt-injection", "prohibited")):
                     self.metrics.safety_blocks += 1
                 self.metrics.total_latency_ms += (perf_counter() - start) * 1000
+                self._emit_event("request.ok", {"tenant_id": tenant_id, "cached": False})
+                self._emit_metrics()
                 return {"status": "ok", "response": payload, "cached": False}
             except Exception as exc:
                 last_error = exc
@@ -143,6 +164,8 @@ class ChatService:
         self.metrics.failed_responses += 1
         if last_error:
             LOGGER.error("ChatService request failed after retries: %s", last_error)
+        self._emit_event("request.failed", {"tenant_id": tenant_id})
+        self._emit_metrics()
         return {"status": "failed", "response": self._fallback_response("Unable to process query safely")}
 
     @staticmethod

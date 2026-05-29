@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from .connectors import FileBackedProviderConnector, SourceConnector
+from .connectors import SourceConnector, default_connectors
 from .config import AssistantConfig
 
 DATASET_PATH_MAP = {
@@ -51,27 +51,7 @@ class EnterpriseDataLayer:
             "regulatory_primary",
             "news_events_secondary",
         )
-        self.connectors: tuple[SourceConnector, ...] = connectors or (
-            FileBackedProviderConnector(
-                provider="nse",
-                dataset_paths={
-                    "instrument_master": self.config.instrument_master_path,
-                    "corporate_actions": self.config.corporate_actions_path,
-                },
-            ),
-            FileBackedProviderConnector(
-                provider="bse",
-                dataset_paths={"filings": self.config.filings_path},
-            ),
-            FileBackedProviderConnector(
-                provider="regulatory",
-                dataset_paths={"regulatory_updates": self.config.regulatory_updates_path},
-            ),
-            FileBackedProviderConnector(
-                provider="news",
-                dataset_paths={"market_events": self.config.market_events_path},
-            ),
-        )
+        self.connectors: tuple[SourceConnector, ...] = connectors or default_connectors(self.config)
         self._snapshot = self.refresh_daily()
 
     def _read_json_list(self, path: Path) -> list[dict]:

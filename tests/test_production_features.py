@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from indian_stock_llm.acceptance import ProductionAcceptanceCriteria, SUPPORTED_QUERY_CATEGORIES
-from indian_stock_llm.api import ApiRequest, ChatApi
+from indian_stock_llm.api import ApiRequest, ChatApi, build_chat_api
 from indian_stock_llm.config import AssistantConfig
 from indian_stock_llm.data_layer import EnterpriseDataLayer
 from indian_stock_llm.evaluation import BenchmarkResult, passes_release_gate
@@ -127,6 +127,14 @@ def test_empty_query_is_rejected(tmp_path: Path) -> None:
     assert result["status"] == "bad_request"
     metrics = service.export_metrics()
     assert metrics["invalid_requests"] == 1.0
+
+
+def test_build_chat_api_uses_runtime_monitoring_config(tmp_path: Path) -> None:
+    config = _config(tmp_path)
+    config = AssistantConfig(**{**config.__dict__, "monitoring_backend": "logging"})
+    api = build_chat_api(config=config, tenant_api_keys={"tenant-a": "secret"})
+    result = api.query(ApiRequest(tenant_id="tenant-a", api_key="secret", query="What is SEBI role in market regulation?"))
+    assert result["status"] == "ok"
 
 
 def test_cache_entry_expires_when_ttl_elapsed() -> None:

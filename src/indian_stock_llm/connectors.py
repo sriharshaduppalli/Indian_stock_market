@@ -4,7 +4,12 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 from time import perf_counter
+from typing import TYPE_CHECKING
 from typing import Protocol
+from urllib import error, request
+
+if TYPE_CHECKING:
+    from .config import AssistantConfig
 
 DATASET_KEYS = (
     "instrument_master",
@@ -83,3 +88,101 @@ class FileBackedProviderConnector:
                 last_error = exc
         raise ConnectorFetchError(f"{self.provider}:{dataset} fetch failed: {last_error}") from last_error
 
+
+@dataclass(frozen=True)
+class HttpJsonProviderConnector:
+    provider: str
+    dataset_urls: dict[str, str]
+    api_key: str | None = None
+
+    def supports_dataset(self, dataset: str) -> bool:
+        return dataset in self.dataset_urls
+
+    def fetch(self, dataset: str, timeout_seconds: float, retries: int) -> list[dict]:
+        if dataset not in self.dataset_urls:
+            raise ConnectorFetchError(f"{self.provider} connector does not support dataset '{dataset}'")
+        url = self.dataset_urls[dataset]
+        attempts = max(1, retries + 1)
+        last_error: Exception | None = None
+        for _ in range(attempts):
+            started = perf_counter()
+            try:
+                req = request.Request(url, method="GET")
+                req.add_header("Accept", "application/json")
+                if self.api_key:
+                    req.add_header("X-API-Key", self.api_key)
+                with request.urlopen(req, timeout=timeout_seconds) as response:
+                    raw_text = response.read().decode("utf-8")
+                elapsed = perf_counter() - started
+                if elapsed > timeout_seconds:
+                    raise TimeoutError(f"{self.provider}:{dataset} timed out")
+                parsed = json.loads(raw_text)
+                if isinstance(parsed, dict):
+                    parsed = parsed.get("data", [])
+                if not isinstance(parsed, list):
+                    raise ValueError(f"Expected list JSON for {dataset}")
+                normalized: list[dict] = []
+                for row in parsed:
+                    if not isinstance(row, dict):
+                        continue
+                    item = normalize_record(dataset, row, self.provider)
+                    if item:
+                        normalized.append(item)
+                return normalized
+            except (error.URLError, TimeoutError, ValueError, json.JSONDecodeError) as exc:
+                last_error = exc
+        raise ConnectorFetchError(f"{self.provider}:{dataset} fetch failed: {last_error}") from last_error
+
+
+def default_connectors(config: "AssistantConfig") -> tuple[SourceConnector, ...]:
+    if config.live_connectors_enabled:
+        live_endpoints = {
+            "nse": {
+                "instrument_master": config.nse_connector_url,
+                "corporate_actions": config.nse_connector_url,
+            },
+            "bse": {
+                "filings": config.bse_connector_url or config.filings_connector_url,
+            },
+            "regulatory": {
+                "regulatory_updates": config.regulatory_connector_url,
+            },
+            "news": {
+                "market_events": config.news_connector_url,
+            },
+        }
+        live_connectors: list[SourceConnector] = []
+        for provider, mapping in live_endpoints.items():
+            dataset_urls = {dataset: url for dataset, url in mapping.items() if url}
+            if dataset_urls:
+                live_connectors.append(
+                    HttpJsonProviderConnector(
+                        provider=provider,
+                        dataset_urls=dataset_urls,
+                        api_key=config.connector_api_key,
+                    )
+                )
+        if live_connectors:
+            return tuple(live_connectors)
+
+    return (
+        FileBackedProviderConnector(
+            provider="nse",
+            dataset_paths={
+                "instrument_master": config.instrument_master_path,
+                "corporate_actions": config.corporate_actions_path,
+            },
+        ),
+        FileBackedProviderConnector(
+            provider="bse",
+            dataset_paths={"filings": config.filings_path},
+        ),
+        FileBackedProviderConnector(
+            provider="regulatory",
+            dataset_paths={"regulatory_updates": config.regulatory_updates_path},
+        ),
+        FileBackedProviderConnector(
+            provider="news",
+            dataset_paths={"market_events": config.market_events_path},
+        ),
+    )
