@@ -1,0 +1,205 @@
+index,input_query,intent,category,confidence,response
+1,Any recent SEBI or exchange updates that can affect Reliance?,events_news,nse_bse_sebi,0.75,"Intent detected: events_news.
+Category: nse_bse_sebi.
+Latency mode: deterministic.
+Model backend: template-composer.
+Data refresh timestamp: 2026-05-30T14:11:02.049341+00:00.
+Data lineage verified: True.
+Stale feeds: ('none',).
+Partial feeds: ('none',).
+Resolved entity: {'symbol': 'RELIANCE', 'company_name': 'Reliance Industries Limited', 'isin': 'INE002A01018', 'exchange': 'NSE', 'provider': 'nse'}.
+Relevant market context:
+Query focus: Any recent SEBI or exchange updates that can affect Reliance?
+Intent-category mapping: events_news / nse_bse_sebi
+Data readiness snapshot: refreshed_at=2026-05-30T14:11:02.049341+00:00; stale=('none',); partial=('none',); entity={'symbol': 'RELIANCE', 'company_name': 'Reliance Industries Limited', 'isin': 'INE002A01018', 'exchange': 'NSE', 'provider': 'nse'}
+Grounded highlights:
+- SEBI role in market regulation: SEBI regulates securities markets, disclosure standards, insider-trading rules, and investor-protection requirements. (source: domain_seed_v1)
+Analysis guidance: Focus on regulatory impact, management commentary, and timeline of material disclosures.
+Compliance note: This response is informational and should be validated against live market data.
+
+Daily learning loop enabled: 20 feedback samples logged; data can be used to refresh retrieval, recalibrate prediction factors, and improve next-day responses. Use this as a starting point and validate with live NSE/BSE data before decisions."
+2,Calculate return from buy 100 sell 135 for TCS,market_calculations,calculations,0.8500000000000001,"Intent detected: market_calculations.
+Category: calculations.
+Latency mode: deterministic.
+Model backend: template-composer.
+Data refresh timestamp: 2026-05-30T14:11:02.049341+00:00.
+Data lineage verified: True.
+Stale feeds: ('none',).
+Partial feeds: ('none',).
+Resolved entity: None.
+Deterministic calculation: Absolute return is 35.00% (buy=100.0, sell=135.0).
+Relevant market context:
+Query focus: Calculate return from buy 100 sell 135 for TCS
+Intent-category mapping: market_calculations / calculations
+Data readiness snapshot: refreshed_at=2026-05-30T14:11:02.049341+00:00; stale=('none',); partial=('none',); entity=None
+Grounded highlights:
+- Core market calculations: Common market calculations include absolute return, CAGR, volatility, drawdown, and risk-adjusted ratios such as Sharpe. (source: domain_seed_v1)
+- Valuation interpretation: P/E should be interpreted with growth durability, return on capital, and sector cycle context instead of in isolation. (source: domain_seed_v1)
+Deterministic checks: Deterministic calculation: Absolute return is 35.00% (buy=100.0, sell=135.0).
+Analysis guidance: Use deterministic outputs as checks and validate assumptions with live market data.
+Compliance note: This response is informational and should be validated against live market data.
+
+Daily learning loop enabled: 23 feedback samples logged; data can be used to refresh retrieval, recalibrate prediction factors, and improve next-day responses. Use this as a starting point and validate with live NSE/BSE data before decisions."
+3,How should I evaluate PE ratio and valuation for TCS?,fundamentals,analysis,0.75,"Intent detected: fundamentals.
+Category: analysis.
+Latency mode: deterministic.
+Model backend: template-composer.
+Data refresh timestamp: 2026-05-30T14:11:02.049341+00:00.
+Data lineage verified: True.
+Stale feeds: ('none',).
+Partial feeds: ('none',).
+Resolved entity: None.
+Relevant market context:
+Query focus: How should I evaluate PE ratio and valuation for TCS?
+Intent-category mapping: fundamentals / analysis
+Data readiness snapshot: refreshed_at=2026-05-30T14:11:02.049341+00:00; stale=('none',); partial=('none',); entity=None
+Grounded highlights:
+- Valuation interpretation: P/E should be interpreted with growth durability, return on capital, and sector cycle context instead of in isolation. (source: domain_seed_v1)
+Analysis guidance: Focus on earnings quality, valuation metrics, balance-sheet strength, and sector positioning.
+Compliance note: This response is informational and should be validated against live market data.
+
+Daily learning loop enabled: 25 feedback samples logged; data can be used to refresh retrieval, recalibrate prediction factors, and improve next-day responses. Use this as a starting point and validate with live NSE/BSE data before decisions."
+4,Calculate CAGR for start 120 end 203 over 7 years for LTIMindtree,market_calculations,calculations,0.75,"Intent detected: market_calculations.
+Category: calculations.
+Latency mode: deterministic.
+Model backend: template-composer.
+Data refresh timestamp: 2026-05-30T14:11:02.049341+00:00.
+Data lineage verified: True.
+Stale feeds: ('none',).
+Partial feeds: ('none',).
+Resolved entity: None.
+Deterministic calculation: CAGR is 7.80% (from start=120.0, end=203.0, years=7.0).
+Relevant market context:
+Query focus: Calculate CAGR for start 120 end 203 over 7 years for LTIMindtree
+Intent-category mapping: market_calculations / calculations
+Data readiness snapshot: refreshed_at=2026-05-30T14:11:02.049341+00:00; stale=('none',); partial=('none',); entity=None
+Grounded highlights:
+- Core market calculations: Common market calculations include absolute return, CAGR, volatility, drawdown, and risk-adjusted ratios such as Sharpe. (source: domain_seed_v1)
+Deterministic checks: Deterministic calculation: CAGR is 7.80% (from start=120.0, end=203.0, years=7.0).
+Analysis guidance: Use deterministic outputs as checks and validate assumptions with live market data.
+Compliance note: This response is informational and should be validated against live market data.
+
+Daily learning loop enabled: 26 feedback samples logged; data can be used to refresh retrieval, recalibrate prediction factors, and improve next-day responses. Use this as a starting point and validate with live NSE/BSE data before decisions."
+5,Any recent SEBI or exchange updates that can affect TCS?,events_news,nse_bse_sebi,0.75,"Intent detected: events_news.
+Category: nse_bse_sebi.
+Latency mode: deterministic.
+Model backend: template-composer.
+Data refresh timestamp: 2026-05-30T14:11:02.049341+00:00.
+Data lineage verified: True.
+Stale feeds: ('none',).
+Partial feeds: ('none',).
+Resolved entity: None.
+Relevant market context:
+Query focus: Any recent SEBI or exchange updates that can affect TCS?
+Intent-category mapping: events_news / nse_bse_sebi
+Data readiness snapshot: refreshed_at=2026-05-30T14:11:02.049341+00:00; stale=('none',); partial=('none',); entity=None
+Grounded highlights:
+- SEBI role in market regulation: SEBI regulates securities markets, disclosure standards, insider-trading rules, and investor-protection requirements. (source: domain_seed_v1)
+Analysis guidance: Focus on regulatory impact, management commentary, and timeline of material disclosures.
+Compliance note: This response is informational and should be validated against live market data.
+
+Daily learning loop enabled: 29 feedback samples logged; data can be used to refresh retrieval, recalibrate prediction factors, and improve next-day responses. Use this as a starting point and validate with live NSE/BSE data before decisions."
+6,Any recent SEBI or exchange updates that can affect Infosys?,events_news,nse_bse_sebi,0.75,"Intent detected: events_news.
+Category: nse_bse_sebi.
+Latency mode: deterministic.
+Model backend: template-composer.
+Data refresh timestamp: 2026-05-30T14:11:02.049341+00:00.
+Data lineage verified: True.
+Stale feeds: ('none',).
+Partial feeds: ('none',).
+Resolved entity: None.
+Relevant market context:
+Query focus: Any recent SEBI or exchange updates that can affect Infosys?
+Intent-category mapping: events_news / nse_bse_sebi
+Data readiness snapshot: refreshed_at=2026-05-30T14:11:02.049341+00:00; stale=('none',); partial=('none',); entity=None
+Grounded highlights:
+- SEBI role in market regulation: SEBI regulates securities markets, disclosure standards, insider-trading rules, and investor-protection requirements. (source: domain_seed_v1)
+Analysis guidance: Focus on regulatory impact, management commentary, and timeline of material disclosures.
+Compliance note: This response is informational and should be validated against live market data.
+
+Daily learning loop enabled: 30 feedback samples logged; data can be used to refresh retrieval, recalibrate prediction factors, and improve next-day responses. Use this as a starting point and validate with live NSE/BSE data before decisions."
+7,Explain momentum setup and risk factors for Reliance,general_query,stocks,0.95,"Intent detected: general_query.
+Category: stocks.
+Latency mode: deterministic.
+Model backend: template-composer.
+Data refresh timestamp: 2026-05-30T14:11:02.049341+00:00.
+Data lineage verified: True.
+Stale feeds: ('none',).
+Partial feeds: ('none',).
+Resolved entity: {'symbol': 'RELIANCE', 'company_name': 'Reliance Industries Limited', 'isin': 'INE002A01018', 'exchange': 'NSE', 'provider': 'nse'}.
+Relevant market context:
+Query focus: Explain momentum setup and risk factors for Reliance
+Intent-category mapping: general_query / stocks
+Data readiness snapshot: refreshed_at=2026-05-30T14:11:02.049341+00:00; stale=('none',); partial=('none',); entity={'symbol': 'RELIANCE', 'company_name': 'Reliance Industries Limited', 'isin': 'INE002A01018', 'exchange': 'NSE', 'provider': 'nse'}
+Grounded highlights:
+- Prediction guardrails: Stock prediction should be probabilistic, include uncertainty bounds, and avoid guaranteed-return claims while citing data recency. (source: domain_seed_v1)
+- Stock analysis checklist: Stock analysis combines fundamentals, technical trend, volume behavior, earnings quality, sector positioning, and event risk. (source: domain_seed_v1)
+- Portfolio risk basics: Concentration in a single sector increases drawdown risk; diversification across sectors and market caps can reduce volatility. (source: domain_seed_v1)
+Analysis guidance: Prioritize grounded facts and validate with live NSE/BSE data.
+Compliance note: This response is informational and should be validated against live market data.
+
+Daily learning loop enabled: 32 feedback samples logged; data can be used to refresh retrieval, recalibrate prediction factors, and improve next-day responses. Use this as a starting point and validate with live NSE/BSE data before decisions."
+8,Provide technical analysis for NSE listed ICICI Bank shares,stock_analysis,analysis,0.95,"Intent detected: stock_analysis.
+Category: analysis.
+Latency mode: deterministic.
+Model backend: template-composer.
+Data refresh timestamp: 2026-05-30T14:11:02.049341+00:00.
+Data lineage verified: True.
+Stale feeds: ('none',).
+Partial feeds: ('none',).
+Resolved entity: None.
+Relevant market context:
+Query focus: Provide technical analysis for NSE listed ICICI Bank shares
+Intent-category mapping: stock_analysis / analysis
+Data readiness snapshot: refreshed_at=2026-05-30T14:11:02.049341+00:00; stale=('none',); partial=('none',); entity=None
+Grounded highlights:
+- Stock analysis checklist: Stock analysis combines fundamentals, technical trend, volume behavior, earnings quality, sector positioning, and event risk. (source: domain_seed_v1)
+- Banking sector sensitivity: Private banks in India are often sensitive to RBI policy rate changes, credit growth trends, and net interest margin compression risks. (source: domain_seed_v1)
+- NSE and BSE basics: NSE and BSE are India's primary exchanges. Stocks can have NSE symbols and BSE scrip codes mapped to the same company and ISIN. (source: domain_seed_v1)
+Analysis guidance: Focus on trend, momentum, volume confirmation, valuation context, and event risk.
+Compliance note: This response is informational and should be validated against live market data.
+
+Daily learning loop enabled: 34 feedback samples logged; data can be used to refresh retrieval, recalibrate prediction factors, and improve next-day responses. Use this as a starting point and validate with live NSE/BSE data before decisions."
+9,Calculate CAGR for start 120 end 178 over 5 years for ICICI Bank,market_calculations,calculations,0.8500000000000001,"Intent detected: market_calculations.
+Category: calculations.
+Latency mode: deterministic.
+Model backend: template-composer.
+Data refresh timestamp: 2026-05-30T14:11:02.049341+00:00.
+Data lineage verified: True.
+Stale feeds: ('none',).
+Partial feeds: ('none',).
+Resolved entity: None.
+Deterministic calculation: CAGR is 8.21% (from start=120.0, end=178.0, years=5.0).
+Relevant market context:
+Query focus: Calculate CAGR for start 120 end 178 over 5 years for ICICI Bank
+Intent-category mapping: market_calculations / calculations
+Data readiness snapshot: refreshed_at=2026-05-30T14:11:02.049341+00:00; stale=('none',); partial=('none',); entity=None
+Grounded highlights:
+- Core market calculations: Common market calculations include absolute return, CAGR, volatility, drawdown, and risk-adjusted ratios such as Sharpe. (source: domain_seed_v1)
+- Banking sector sensitivity: Private banks in India are often sensitive to RBI policy rate changes, credit growth trends, and net interest margin compression risks. (source: domain_seed_v1)
+Deterministic checks: Deterministic calculation: CAGR is 8.21% (from start=120.0, end=178.0, years=5.0).
+Analysis guidance: Use deterministic outputs as checks and validate assumptions with live market data.
+Compliance note: This response is informational and should be validated against live market data.
+
+Daily learning loop enabled: 37 feedback samples logged; data can be used to refresh retrieval, recalibrate prediction factors, and improve next-day responses. Use this as a starting point and validate with live NSE/BSE data before decisions."
+10,Explain momentum setup and risk factors for TCS,general_query,stocks,0.95,"Intent detected: general_query.
+Category: stocks.
+Latency mode: deterministic.
+Model backend: template-composer.
+Data refresh timestamp: 2026-05-30T14:11:02.049341+00:00.
+Data lineage verified: True.
+Stale feeds: ('none',).
+Partial feeds: ('none',).
+Resolved entity: None.
+Relevant market context:
+Query focus: Explain momentum setup and risk factors for TCS
+Intent-category mapping: general_query / stocks
+Data readiness snapshot: refreshed_at=2026-05-30T14:11:02.049341+00:00; stale=('none',); partial=('none',); entity=None
+Grounded highlights:
+- Prediction guardrails: Stock prediction should be probabilistic, include uncertainty bounds, and avoid guaranteed-return claims while citing data recency. (source: domain_seed_v1)
+- Portfolio risk basics: Concentration in a single sector increases drawdown risk; diversification across sectors and market caps can reduce volatility. (source: domain_seed_v1)
+- Stock analysis checklist: Stock analysis combines fundamentals, technical trend, volume behavior, earnings quality, sector positioning, and event risk. (source: domain_seed_v1)
+Analysis guidance: Prioritize grounded facts and validate with live NSE/BSE data.
+Compliance note: This response is informational and should be validated against live market data.
+
+Daily learning loop enabled: 39 feedback samples logged; data can be used to refresh retrieval, recalibrate prediction factors, and improve next-day responses. Use this as a starting point and validate with live NSE/BSE data before decisions."

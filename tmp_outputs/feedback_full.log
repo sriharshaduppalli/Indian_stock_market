@@ -1,0 +1,40 @@
+2026-05-30T14:10:48.049624+00:00	events_news	Any recent SEBI or exchange updates that can affect Reliance?
+{"ts": "2026-05-30T14:10:48.049645+00:00", "intent": "events_news", "query_hash": "7000fd26a733c830946bc40bea93ab40298829f2b2bcaa8aa77d6d6c2563e616"}
+2026-05-30T14:10:48.050566+00:00	market_calculations	Calculate return from buy 100 sell 135 for TCS
+{"ts": "2026-05-30T14:10:48.050579+00:00", "intent": "market_calculations", "query_hash": "158f1e84f600b5ccaa4153b966c556106b70c984e307e6f08ef86d8b6e3f14a4"}
+2026-05-30T14:10:48.051420+00:00	fundamentals	How should I evaluate PE ratio and valuation for TCS?
+{"ts": "2026-05-30T14:10:48.051435+00:00", "intent": "fundamentals", "query_hash": "664bdd0182997e3cca5e3c7a5c671ff7f3910e819c05bbd7ddee5ceacf4f4c5c"}
+2026-05-30T14:10:48.052201+00:00	market_calculations	Calculate CAGR for start 120 end 203 over 7 years for LTIMindtree
+{"ts": "2026-05-30T14:10:48.052216+00:00", "intent": "market_calculations", "query_hash": "7e8d7c8d256ee0fa9e3f716a38292b62422d7d2310ddb33e57b332ad65ad0d63"}
+2026-05-30T14:10:48.052969+00:00	events_news	Any recent SEBI or exchange updates that can affect TCS?
+{"ts": "2026-05-30T14:10:48.052999+00:00", "intent": "events_news", "query_hash": "1faf744c61216aef2c149b842d96833b378ee698bf9e89b6c81b41d4004d6c76"}
+2026-05-30T14:10:48.053686+00:00	events_news	Any recent SEBI or exchange updates that can affect Infosys?
+{"ts": "2026-05-30T14:10:48.053700+00:00", "intent": "events_news", "query_hash": "cca3a823a9acf96d2dc3576f4c60ad191ae2db78baec549695445a8b2375e2f9"}
+2026-05-30T14:10:48.054453+00:00	general_query	Explain momentum setup and risk factors for Reliance
+{"ts": "2026-05-30T14:10:48.054460+00:00", "intent": "general_query", "query_hash": "9d2b4d0988032add33777d114e6c2802e7b812503df5f5e9e42dfca36022edad"}
+2026-05-30T14:10:48.055354+00:00	stock_analysis	Provide technical analysis for NSE listed ICICI Bank shares
+{"ts": "2026-05-30T14:10:48.055365+00:00", "intent": "stock_analysis", "query_hash": "8249ce15aa71ec00a460148ae8c0d0413ac4633f253a4db42bfd5e0bfb8ba2f8"}
+2026-05-30T14:10:48.056214+00:00	market_calculations	Calculate CAGR for start 120 end 178 over 5 years for ICICI Bank
+{"ts": "2026-05-30T14:10:48.056227+00:00", "intent": "market_calculations", "query_hash": "3206a0023f74a9621c089453c972fe6a85ffbd8d039e991c34a1bb9fa815a85d"}
+2026-05-30T14:10:48.056970+00:00	general_query	Explain momentum setup and risk factors for TCS
+{"ts": "2026-05-30T14:10:48.057003+00:00", "intent": "general_query", "query_hash": "a026381bdbed279dbf62528e6c426691066a8936a002c388bd8736477963161c"}
+2026-05-30T14:11:02.050006+00:00	events_news	Any recent SEBI or exchange updates that can affect Reliance?
+{"ts": "2026-05-30T14:11:02.050025+00:00", "intent": "events_news", "query_hash": "7000fd26a733c830946bc40bea93ab40298829f2b2bcaa8aa77d6d6c2563e616"}
+2026-05-30T14:11:02.050913+00:00	market_calculations	Calculate return from buy 100 sell 135 for TCS
+{"ts": "2026-05-30T14:11:02.050928+00:00", "intent": "market_calculations", "query_hash": "158f1e84f600b5ccaa4153b966c556106b70c984e307e6f08ef86d8b6e3f14a4"}
+2026-05-30T14:11:02.051760+00:00	fundamentals	How should I evaluate PE ratio and valuation for TCS?
+{"ts": "2026-05-30T14:11:02.051774+00:00", "intent": "fundamentals", "query_hash": "664bdd0182997e3cca5e3c7a5c671ff7f3910e819c05bbd7ddee5ceacf4f4c5c"}
+2026-05-30T14:11:02.052535+00:00	market_calculations	Calculate CAGR for start 120 end 203 over 7 years for LTIMindtree
+{"ts": "2026-05-30T14:11:02.052549+00:00", "intent": "market_calculations", "query_hash": "7e8d7c8d256ee0fa9e3f716a38292b62422d7d2310ddb33e57b332ad65ad0d63"}
+2026-05-30T14:11:02.053302+00:00	events_news	Any recent SEBI or exchange updates that can affect TCS?
+{"ts": "2026-05-30T14:11:02.053316+00:00", "intent": "events_news", "query_hash": "1faf744c61216aef2c149b842d96833b378ee698bf9e89b6c81b41d4004d6c76"}
+2026-05-30T14:11:02.053993+00:00	events_news	Any recent SEBI or exchange updates that can affect Infosys?
+{"ts": "2026-05-30T14:11:02.054006+00:00", "intent": "events_news", "query_hash": "cca3a823a9acf96d2dc3576f4c60ad191ae2db78baec549695445a8b2375e2f9"}
+2026-05-30T14:11:02.054721+00:00	general_query	Explain momentum setup and risk factors for Reliance
+{"ts": "2026-05-30T14:11:02.054734+00:00", "intent": "general_query", "query_hash": "9d2b4d0988032add33777d114e6c2802e7b812503df5f5e9e42dfca36022edad"}
+2026-05-30T14:11:02.055489+00:00	stock_analysis	Provide technical analysis for NSE listed ICICI Bank shares
+{"ts": "2026-05-30T14:11:02.055503+00:00", "intent": "stock_analysis", "query_hash": "8249ce15aa71ec00a460148ae8c0d0413ac4633f253a4db42bfd5e0bfb8ba2f8"}
+2026-05-30T14:11:02.056288+00:00	market_calculations	Calculate CAGR for start 120 end 178 over 5 years for ICICI Bank
+{"ts": "2026-05-30T14:11:02.056302+00:00", "intent": "market_calculations", "query_hash": "3206a0023f74a9621c089453c972fe6a85ffbd8d039e991c34a1bb9fa815a85d"}
+2026-05-30T14:11:02.057071+00:00	general_query	Explain momentum setup and risk factors for TCS
+{"ts": "2026-05-30T14:11:02.057084+00:00", "intent": "general_query", "query_hash": "a026381bdbed279dbf62528e6c426691066a8936a002c388bd8736477963161c"}
