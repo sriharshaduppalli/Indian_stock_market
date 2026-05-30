@@ -1,0 +1,20 @@
+[
+  {
+    "symbol": "INFY",
+    "company_name": "Infosys Limited",
+    "isin": "INE009A01021",
+    "exchange": "NSE"
+  },
+  {
+    "symbol": "RELIANCE",
+    "company_name": "Reliance Industries Limited",
+    "isin": "INE002A01018",
+    "exchange": "NSE"
+  },
+  {
+    "symbol": "HDFCBANK",
+    "company_name": "HDFC Bank Limited",
+    "isin": "INE040A01034",
+    "exchange": "NSE"
+  }
+]

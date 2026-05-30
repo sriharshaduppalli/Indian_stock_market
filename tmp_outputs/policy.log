@@ -1,0 +1,20 @@
+2026-05-30T14:08:18.698184+00:00	allowed=True	rule_id=allow_disclosure	reason=Allowed with SEBI-aligned disclosure requirements	query=Calculate CAGR for start 120 end 194 over 4 years for Reliance
+2026-05-30T14:08:18.699198+00:00	allowed=True	rule_id=allow_disclosure	reason=Allowed with SEBI-aligned disclosure requirements	query=Provide technical analysis for NSE listed HDFC Bank shares
+2026-05-30T14:08:18.700223+00:00	allowed=True	rule_id=allow_disclosure	reason=Allowed with SEBI-aligned disclosure requirements	query=Calculate return from buy 100 sell 168 for SBI
+2026-05-30T14:08:18.701091+00:00	allowed=True	rule_id=allow_disclosure	reason=Allowed with SEBI-aligned disclosure requirements	query=Provide technical analysis for NSE listed ICICI Bank shares
+2026-05-30T14:08:18.701930+00:00	allowed=True	rule_id=allow_disclosure	reason=Allowed with SEBI-aligned disclosure requirements	query=Predict next week outlook for TCS stock in India
+2026-05-30T14:08:18.702837+00:00	allowed=True	rule_id=allow_disclosure	reason=Allowed with SEBI-aligned disclosure requirements	query=Predict next week outlook for Reliance stock in India
+2026-05-30T14:08:18.703709+00:00	allowed=True	rule_id=allow_disclosure	reason=Allowed with SEBI-aligned disclosure requirements	query=Explain momentum setup and risk factors for Reliance
+2026-05-30T14:08:18.704574+00:00	allowed=True	rule_id=allow_disclosure	reason=Allowed with SEBI-aligned disclosure requirements	query=What is the latest technical trend for Axis Bank?
+2026-05-30T14:08:18.705341+00:00	allowed=True	rule_id=allow_disclosure	reason=Allowed with SEBI-aligned disclosure requirements	query=Any recent SEBI or exchange updates that can affect Reliance?
+2026-05-30T14:08:18.706174+00:00	allowed=True	rule_id=allow_disclosure	reason=Allowed with SEBI-aligned disclosure requirements	query=Predict next week outlook for SBI stock in India
+2026-05-30T14:08:29.686849+00:00	allowed=True	rule_id=allow_disclosure	reason=Allowed with SEBI-aligned disclosure requirements	query=Any recent SEBI or exchange updates that can affect Reliance?
+2026-05-30T14:08:29.687898+00:00	allowed=True	rule_id=allow_disclosure	reason=Allowed with SEBI-aligned disclosure requirements	query=Calculate return from buy 100 sell 135 for TCS
+2026-05-30T14:08:29.688834+00:00	allowed=True	rule_id=allow_disclosure	reason=Allowed with SEBI-aligned disclosure requirements	query=How should I evaluate PE ratio and valuation for TCS?
+2026-05-30T14:08:29.689708+00:00	allowed=True	rule_id=allow_disclosure	reason=Allowed with SEBI-aligned disclosure requirements	query=Calculate CAGR for start 120 end 203 over 7 years for LTIMindtree
+2026-05-30T14:08:29.690637+00:00	allowed=True	rule_id=allow_disclosure	reason=Allowed with SEBI-aligned disclosure requirements	query=Any recent SEBI or exchange updates that can affect TCS?
+2026-05-30T14:08:29.691472+00:00	allowed=True	rule_id=allow_disclosure	reason=Allowed with SEBI-aligned disclosure requirements	query=Any recent SEBI or exchange updates that can affect Infosys?
+2026-05-30T14:08:29.692335+00:00	allowed=True	rule_id=allow_disclosure	reason=Allowed with SEBI-aligned disclosure requirements	query=Explain momentum setup and risk factors for Reliance
+2026-05-30T14:08:29.693270+00:00	allowed=True	rule_id=allow_disclosure	reason=Allowed with SEBI-aligned disclosure requirements	query=Provide technical analysis for NSE listed ICICI Bank shares
+2026-05-30T14:08:29.694132+00:00	allowed=True	rule_id=allow_disclosure	reason=Allowed with SEBI-aligned disclosure requirements	query=Calculate CAGR for start 120 end 178 over 5 years for ICICI Bank
+2026-05-30T14:08:29.695028+00:00	allowed=True	rule_id=allow_disclosure	reason=Allowed with SEBI-aligned disclosure requirements	query=Explain momentum setup and risk factors for TCS
