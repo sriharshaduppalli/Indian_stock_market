@@ -4,3 +4,75 @@
 2026-05-29T20:59:10.546964+00:00	general_query	Explain lunar geology impact on equities
 2026-05-29T23:32:09.923681+00:00	fundamentals	What are valuation risks in Indian IT stocks?
 2026-05-29T23:32:21.154575+00:00	fundamentals	What are valuation risks in Indian IT stocks?
+2026-05-30T14:13:28.247337+00:00	general_query	What are key risks in PSU bank stocks in India right now?
+{"ts": "2026-05-30T14:13:28.247356+00:00", "intent": "general_query", "query_hash": "44f8a10bc322d4305403fc700d6e8e870a29dbfcc9212dc41ea07eb4a42431d3"}
+2026-05-30T14:13:28.248499+00:00	stock_analysis	Compare momentum vs value investing for Indian midcaps.
+{"ts": "2026-05-30T14:13:28.248516+00:00", "intent": "stock_analysis", "query_hash": "bb674286d302cf89f49fa7262d08ac6ed55f1fcc6c2cd9d4a40844d4aaebab91"}
+2026-05-30T14:13:28.249561+00:00	market_calculations	Calculate CAGR if investment grows from 2 lakh to 5 lakh in 7 years.
+{"ts": "2026-05-30T14:13:28.249580+00:00", "intent": "market_calculations", "query_hash": "31730461ab76f7018841b009babf20f2c9da4fde1ca39ecb16c1920eaf03de61"}
+2026-05-30T14:13:28.250787+00:00	market_calculations	Should I buy Tata Motors tomorrow for guaranteed 10% return?
+{"ts": "2026-05-30T14:13:28.250809+00:00", "intent": "market_calculations", "query_hash": "a1390463742aec598866b6d11bbc7037802e9dc26e8b6ef71498e569847347d9"}
+2026-05-30T14:13:28.252067+00:00	prediction	Predict NIFTY for next 5 trading days.
+{"ts": "2026-05-30T14:13:28.252088+00:00", "intent": "prediction", "query_hash": "dddfc6fcbb1e5d60c9c584f8baf9e7617d10cd390e56f888e29a47cf27653f6c"}
+2026-05-30T14:13:28.253329+00:00	events_news	How does SEBI protect retail investors?
+{"ts": "2026-05-30T14:13:28.253348+00:00", "intent": "events_news", "query_hash": "860c89f2eb44c052cb9d5f6db73131e0f42b537d4cbb29626e12451a3da65b85"}
+2026-05-30T14:13:28.254376+00:00	price_action	Which sectors in India are sensitive to crude oil price spikes?
+{"ts": "2026-05-30T14:13:28.254384+00:00", "intent": "price_action", "query_hash": "98bb1e04bee309102182f303ecdc4e7ad2724650ef7e38d6ce2b8734b4a09a24"}
+2026-05-30T14:13:28.255112+00:00	general_query	What is the difference between NSE and BSE for liquidity?
+{"ts": "2026-05-30T14:13:28.255119+00:00", "intent": "general_query", "query_hash": "58a25961d32b858292a9018125947d8feafcce735de3e7c50fa4f53c9336f881"}
+2026-05-30T14:13:28.257714+00:00	fundamentals	What are common valuation metrics for Indian IT companies?
+{"ts": "2026-05-30T14:13:28.257730+00:00", "intent": "fundamentals", "query_hash": "14fad88554f5ec2b2cfa785a322c41728fa8fcc765dde2c67a73181dc2172cf1"}
+2026-05-30T14:13:28.258950+00:00	market_calculations	If I invest 10000 monthly for 15 years at 12% annual return, what corpus can I expect?
+{"ts": "2026-05-30T14:13:28.258970+00:00", "intent": "market_calculations", "query_hash": "e36abd94487ce5606eded3616edd4ca2ff71b0327c1301df63ab7901c9d9e9ff"}
+2026-05-30T14:13:28.260328+00:00	general_query	Explain US Fed rate impact on Indian equities.
+{"ts": "2026-05-30T14:13:28.260348+00:00", "intent": "general_query", "query_hash": "6bf2830de7c737098b9fb502982f2fbc4a4443c078fb1a10a184b992fa2594d1"}
+2026-05-30T14:13:38.528727+00:00	general_query	What are key risks in PSU bank stocks in India right now?
+{"ts": "2026-05-30T14:13:38.528747+00:00", "intent": "general_query", "query_hash": "44f8a10bc322d4305403fc700d6e8e870a29dbfcc9212dc41ea07eb4a42431d3"}
+2026-05-30T14:13:38.529863+00:00	stock_analysis	Compare momentum vs value investing for Indian midcaps.
+{"ts": "2026-05-30T14:13:38.529880+00:00", "intent": "stock_analysis", "query_hash": "bb674286d302cf89f49fa7262d08ac6ed55f1fcc6c2cd9d4a40844d4aaebab91"}
+2026-05-30T14:13:38.530921+00:00	market_calculations	Calculate CAGR if investment grows from 2 lakh to 5 lakh in 7 years.
+{"ts": "2026-05-30T14:13:38.530940+00:00", "intent": "market_calculations", "query_hash": "31730461ab76f7018841b009babf20f2c9da4fde1ca39ecb16c1920eaf03de61"}
+2026-05-30T14:13:38.532146+00:00	market_calculations	Should I buy Tata Motors tomorrow for guaranteed 10% return?
+{"ts": "2026-05-30T14:13:38.532165+00:00", "intent": "market_calculations", "query_hash": "a1390463742aec598866b6d11bbc7037802e9dc26e8b6ef71498e569847347d9"}
+2026-05-30T14:13:38.533302+00:00	prediction	Predict NIFTY for next 5 trading days.
+{"ts": "2026-05-30T14:13:38.533318+00:00", "intent": "prediction", "query_hash": "dddfc6fcbb1e5d60c9c584f8baf9e7617d10cd390e56f888e29a47cf27653f6c"}
+2026-05-30T14:13:38.534325+00:00	events_news	How does SEBI protect retail investors?
+{"ts": "2026-05-30T14:13:38.534344+00:00", "intent": "events_news", "query_hash": "860c89f2eb44c052cb9d5f6db73131e0f42b537d4cbb29626e12451a3da65b85"}
+2026-05-30T14:13:38.535337+00:00	price_action	Which sectors in India are sensitive to crude oil price spikes?
+{"ts": "2026-05-30T14:13:38.535353+00:00", "intent": "price_action", "query_hash": "98bb1e04bee309102182f303ecdc4e7ad2724650ef7e38d6ce2b8734b4a09a24"}
+2026-05-30T14:13:38.536480+00:00	general_query	What is the difference between NSE and BSE for liquidity?
+{"ts": "2026-05-30T14:13:38.536499+00:00", "intent": "general_query", "query_hash": "58a25961d32b858292a9018125947d8feafcce735de3e7c50fa4f53c9336f881"}
+2026-05-30T14:13:38.538071+00:00	fundamentals	What are common valuation metrics for Indian IT companies?
+{"ts": "2026-05-30T14:13:38.538090+00:00", "intent": "fundamentals", "query_hash": "14fad88554f5ec2b2cfa785a322c41728fa8fcc765dde2c67a73181dc2172cf1"}
+2026-05-30T14:13:38.539242+00:00	market_calculations	If I invest 10000 monthly for 15 years at 12% annual return, what corpus can I expect?
+{"ts": "2026-05-30T14:13:38.539258+00:00", "intent": "market_calculations", "query_hash": "e36abd94487ce5606eded3616edd4ca2ff71b0327c1301df63ab7901c9d9e9ff"}
+2026-05-30T14:13:38.540299+00:00	general_query	Explain US Fed rate impact on Indian equities.
+{"ts": "2026-05-30T14:13:38.540317+00:00", "intent": "general_query", "query_hash": "6bf2830de7c737098b9fb502982f2fbc4a4443c078fb1a10a184b992fa2594d1"}
+2026-05-30T14:13:44.588787+00:00	market_calculations	Calculate CAGR if investment grows from 2 lakh to 5 lakh in 7 years.
+{"ts": "2026-05-30T14:13:44.588807+00:00", "intent": "market_calculations", "query_hash": "31730461ab76f7018841b009babf20f2c9da4fde1ca39ecb16c1920eaf03de61"}
+2026-05-30T14:13:44.590005+00:00	market_calculations	Should I buy Tata Motors tomorrow for guaranteed 10% return?
+{"ts": "2026-05-30T14:13:44.590022+00:00", "intent": "market_calculations", "query_hash": "a1390463742aec598866b6d11bbc7037802e9dc26e8b6ef71498e569847347d9"}
+2026-05-30T14:13:44.591733+00:00	market_calculations	If I invest 10000 monthly for 15 years at 12% annual return, what corpus can I expect?
+{"ts": "2026-05-30T14:13:44.591754+00:00", "intent": "market_calculations", "query_hash": "e36abd94487ce5606eded3616edd4ca2ff71b0327c1301df63ab7901c9d9e9ff"}
+2026-05-30T14:13:51.046822+00:00	general_query	Give me a simple explanation of market cap.
+{"ts": "2026-05-30T14:13:51.046842+00:00", "intent": "general_query", "query_hash": "efcf0108d7df93ceafc27f5781cb851cafadcc1cec47ed702966b8ebf4922238"}
+2026-05-30T14:13:51.047894+00:00	fundamentals	Is it legal to do insider trading in India if profit is small?
+{"ts": "2026-05-30T14:13:51.047912+00:00", "intent": "fundamentals", "query_hash": "6f8808267b63d1311154b9cb50642b22b9de9e6a7ad5c8f03a971bb24c34fd80"}
+2026-05-30T14:13:51.048821+00:00	general_query	Tell me one diversified approach for beginner Indian investors.
+{"ts": "2026-05-30T14:13:51.048836+00:00", "intent": "general_query", "query_hash": "08e0fb7758b77d867ba8abc15ab5d761af808b7425fa61fe972aa8580640471d"}
+2026-05-30T14:13:51.049966+00:00	general_query	What happened in yesterday's IPL match?
+{"ts": "2026-05-30T14:13:51.049981+00:00", "intent": "general_query", "query_hash": "ab6785e8150d1506b8d1f2d5ea35320c556dbff7854ce068711e8ad00f3b1a84"}
+2026-05-30T14:13:51.051010+00:00	general_query	Can you execute a buy order for HDFC Bank now?
+{"ts": "2026-05-30T14:13:51.051028+00:00", "intent": "general_query", "query_hash": "be3a6a72e95605d89ac969e4ae2597c7df9e175e3f02f69705ecf306a2ba291f"}
+2026-05-30T14:13:51.052103+00:00	market_calculations	Compute return if buy at 120 and sell at 150
+{"ts": "2026-05-30T14:13:51.052118+00:00", "intent": "market_calculations", "query_hash": "fd3e3a615c5e2ce2a253aff01ead71b5498e78052939485f0707299bd06b3989"}
+2026-05-30T14:13:51.053028+00:00	general_query	What are warning signs of pump-and-dump stocks?
+{"ts": "2026-05-30T14:13:51.053044+00:00", "intent": "general_query", "query_hash": "e4b5ef88c3e0d5758365b12ffb7f358a58f554364e64fb54464aa46f99fe2a87"}
+2026-05-30T14:13:51.054008+00:00	portfolio	Summarize risk management rules for swing trading in India.
+{"ts": "2026-05-30T14:13:51.054023+00:00", "intent": "portfolio", "query_hash": "3bd3fc0eebf6c5a17c5bd366c555056398b948eb0eddd4e1d90443135ab60515"}
+2026-05-30T14:13:55.450651+00:00	fundamentals	Is it legal to do insider trading in India if profit is small?
+{"ts": "2026-05-30T14:13:55.450669+00:00", "intent": "fundamentals", "query_hash": "6f8808267b63d1311154b9cb50642b22b9de9e6a7ad5c8f03a971bb24c34fd80"}
+2026-05-30T14:13:55.451831+00:00	general_query	What happened in yesterday's IPL match?
+{"ts": "2026-05-30T14:13:55.451848+00:00", "intent": "general_query", "query_hash": "ab6785e8150d1506b8d1f2d5ea35320c556dbff7854ce068711e8ad00f3b1a84"}
+2026-05-30T14:13:55.453015+00:00	general_query	Can you execute a buy order for HDFC Bank now?
+{"ts": "2026-05-30T14:13:55.453031+00:00", "intent": "general_query", "query_hash": "be3a6a72e95605d89ac969e4ae2597c7df9e175e3f02f69705ecf306a2ba291f"}
