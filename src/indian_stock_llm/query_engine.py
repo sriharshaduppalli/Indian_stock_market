@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .acceptance import ProductionAcceptanceCriteria, SUPPORTED_QUERY_CATEGORIES
-from .calculations import DeterministicCalculator
+from .calculations import DeterministicCalculator, PandasTaIndicatorCalculator
 from .config import AssistantConfig, default_config, runtime_config_from_env
 from .data_layer import EnterpriseDataLayer
 from .knowledge_base import (
@@ -27,7 +27,21 @@ INTENT_KEYWORDS = {
     "events_news": {"news", "event", "result", "results", "quarter", "guidance", "sebi", "regulation"},
     "portfolio": {"portfolio", "allocation", "risk", "diversification"},
     "stock_analysis": {"analyze", "analysis", "technical", "trend", "momentum"},
-    "market_calculations": {"calculate", "calculation", "cagr", "return", "volatility", "beta"},
+    "market_calculations": {
+        "calculate",
+        "calculation",
+        "cagr",
+        "return",
+        "volatility",
+        "beta",
+        "indicator",
+        "indicators",
+        "rsi",
+        "sma",
+        "ema",
+        "macd",
+        "bollinger",
+    },
 }
 MAX_CONFIDENCE = 0.95
 BASE_CONTEXT_CONFIDENCE = 0.65
@@ -156,7 +170,16 @@ class StockMarketAssistant:
             return "general_query"
         top_scores = sorted(scores.values(), reverse=True)
         if len(top_scores) > 1 and top_scores[0] == top_scores[1]:
-            if "calculate" in tokens or "cagr" in tokens or "return" in tokens:
+            if (
+                "calculate" in tokens
+                or "cagr" in tokens
+                or "return" in tokens
+                or "rsi" in tokens
+                or "sma" in tokens
+                or "ema" in tokens
+                or "macd" in tokens
+                or "bollinger" in tokens
+            ):
                 return "market_calculations"
             if "predict" in tokens or "forecast" in tokens:
                 return "prediction"
@@ -257,15 +280,23 @@ class StockMarketAssistant:
         citations = self._extract_citations(context_items)
         deterministic_note = ""
         if intent == "market_calculations":
+            note_lines: list[str] = []
             deterministic = self._deterministic_calculation(query)
-            deterministic_note = (
-                f"Deterministic calculation: {deterministic}"
-                if deterministic
-                else (
+            if deterministic:
+                note_lines.append(f"Deterministic calculation: {deterministic}")
+            elif "cagr" in query.lower() or "return" in query.lower():
+                note_lines.append(
                     "Deterministic calculation unavailable: provide valid positive numeric inputs "
                     "(for CAGR: start, end, years; for return: buy, sell)."
                 )
-            )
+            indicator_note = PandasTaIndicatorCalculator.indicator_note(query)
+            if indicator_note:
+                note_lines.append(f"Indicator calculation: {indicator_note}")
+            elif PandasTaIndicatorCalculator.indicator_requested(query):
+                note_lines.append(
+                    "Indicator calculation unavailable: provide an indicator query with explicit price series."
+                )
+            deterministic_note = "\n".join(note_lines)
 
         if context_items:
             context_text = "\n".join(

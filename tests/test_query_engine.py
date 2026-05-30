@@ -103,6 +103,14 @@ def test_return_calculation_rejects_negative_sell_value(tmp_path: Path) -> None:
     assert "Deterministic calculation unavailable" in response.answer
 
 
+def test_indicator_query_routes_to_market_calculations(tmp_path: Path) -> None:
+    assistant = _assistant_with_repo_kb(tmp_path)
+    response = assistant.ask("Show RSI indicator for prices 100, 101, 102, 103, 104, 105")
+
+    assert response.intent == "market_calculations"
+    assert "Indicator calculation:" in response.answer
+
+
 def test_prediction_contains_policy_disclaimer(tmp_path: Path) -> None:
     assistant = _assistant_with_repo_kb(tmp_path)
     response = assistant.ask("Predict next week outlook for NSE banking stocks")

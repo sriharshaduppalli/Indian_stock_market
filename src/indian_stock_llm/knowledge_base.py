@@ -41,7 +41,7 @@ EMBEDDING_DIM = 64
 INTENT_TAG_PRIORS = {
     "fundamentals": {"fundamentals", "valuation", "pe"},
     "events_news": {"sebi", "regulation", "guidance", "earnings"},
-    "market_calculations": {"calculation", "cagr", "return", "volatility"},
+    "market_calculations": {"calculation", "cagr", "return", "volatility", "rsi", "sma", "ema", "macd", "bollinger"},
     "prediction": {"prediction", "forecast", "uncertainty", "risk"},
     "stock_analysis": {"analysis", "technical", "fundamental", "earnings"},
     "portfolio": {"portfolio", "risk", "diversification"},

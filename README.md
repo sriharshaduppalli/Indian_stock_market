@@ -13,7 +13,7 @@ Indian stock market data, analysis, prompts, queries, and LLM model scaffold wit
   - Grounded response composition with source citations
   - Production-style response metadata (confidence, citations, disclaimer, safety flag)
   - Prediction-intent path with live-impact factor guidance
-  - Deterministic calculation support for common return/CAGR prompts
+  - Deterministic calculation support for common return/CAGR prompts plus pandas-ta indicator routing in market calculations
   - SEBI-aligned safety checks, prompt-injection defenses, and policy audit logs
   - Enterprise data layer scaffold with source hierarchy, validation, refresh, and lineage metadata
   - Android-ready chat serving scaffold (stable contract, cache, rate-limit, retries, circuit-breaker, fallback)
