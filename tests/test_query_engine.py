@@ -1,3 +1,4 @@
+import random
 from pathlib import Path
 
 from indian_stock_llm.calculations import PandasTaIndicatorCalculator
@@ -173,3 +174,40 @@ def test_intent_classification_falls_back_when_optional_nlp_backend_unavailable(
     assistant = StockMarketAssistant(config=config)
     response = assistant.ask("Predict next week outlook for Indian IT stocks")
     assert response.intent == "prediction"
+
+
+def test_query_engine_handles_random_indian_stock_queries(tmp_path: Path) -> None:
+    assistant = _assistant_with_repo_kb(tmp_path)
+    rng = random.Random(42)
+    stocks = ["Infosys", "TCS", "HDFC Bank", "Reliance", "ICICI Bank", "SBI"]
+    query_templates = [
+        "What is the latest technical trend for {stock}?",
+        "Predict next week outlook for {stock} stock in India",
+        "How should I evaluate PE ratio and valuation for {stock}?",
+        "Any recent SEBI or exchange updates that can affect {stock}?",
+        "Calculate return from buy 100 sell {sell_price} for {stock}",
+    ]
+
+    for _ in range(20):
+        template = rng.choice(query_templates)
+        stock = rng.choice(stocks)
+        query = template.format(stock=stock, sell_price=rng.randint(80, 180))
+        payload = assistant.query(query)
+
+        assert payload["intent"] in {
+            "general_query",
+            "events_news",
+            "fundamentals",
+            "market_calculations",
+            "prediction",
+            "portfolio",
+            "price_action",
+            "stock_analysis",
+        }
+        assert payload["category"] in {"stocks", "analysis", "nse_bse_sebi", "calculations", "prediction_guidance"}
+        assert isinstance(payload["answer"], str)
+        assert payload["answer"]
+        assert isinstance(payload["confidence"], float)
+        assert 0.0 <= payload["confidence"] <= 1.0
+        assert isinstance(payload["citations"], list)
+        assert isinstance(payload["disclaimer"], str)
