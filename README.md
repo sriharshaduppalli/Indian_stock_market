@@ -61,6 +61,13 @@ Indian stock market data, analysis, prompts, queries, and LLM model scaffold wit
    ```bash
    PYTHONPATH=src python -m indian_stock_llm.cli --json "Predict NIFTY next week"
    ```
+5. Run HTTP wrapper for Android/backend integrations:
+   ```bash
+   PYTHONPATH=src python -m indian_stock_llm.http_server
+   ```
+   - `GET /health` (liveness + contract version)
+   - `GET /metrics` (internal/admin endpoint; optional `X-Admin-Token`)
+   - `POST /query` (tenant-scoped query with `X-Tenant-Id`, `X-API-Key`, and JSON `{ "query": "..." }`)
 
 ## Production integration knobs
 - Managed providers:
@@ -82,3 +89,11 @@ Indian stock market data, analysis, prompts, queries, and LLM model scaffold wit
   - `health()` for liveness + contract version
   - `metrics()` for operational observability
   - `query(ApiRequest)` for authenticated tenant-scoped querying
+
+## Production deployment topology
+- Android app remains thin and calls backend HTTP endpoints only.
+- Deploy the backend container behind API gateway/WAF with TLS termination.
+- Keep model/provider secrets server-side only; Android sends tenant credentials only.
+- Configure health probes on `/health`, private admin metrics on `/metrics`, and autoscaling on p95/p99 latency + failure-rate signals.
+- Enable audit logging (`ISM_AUDIT_LOG_PATH`) with retention (`ISM_AUDIT_RETENTION_DAYS`) for regulated environments.
+- Roll out in stages: internal -> beta tenants -> canary -> GA, with rollback on release-gate/SLO breach.
