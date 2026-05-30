@@ -23,7 +23,69 @@ class TemplateModelBackend:
 
     def generate(self, prompt: str, timeout_seconds: float) -> ModelResponse:
         _ = timeout_seconds
-        return ModelResponse(answer=prompt, model_name=self.model_name, latency_mode="deterministic")
+        return ModelResponse(
+            answer=self._compose_answer(prompt),
+            model_name=self.model_name,
+            latency_mode="deterministic",
+        )
+
+    @staticmethod
+    def _extract_field(prompt: str, label: str) -> str:
+        for line in prompt.splitlines():
+            if line.startswith(f"{label}:"):
+                return line.split(":", 1)[1].strip()
+        return ""
+
+    @classmethod
+    def _extract_context_lines(cls, prompt: str) -> list[str]:
+        marker = "Grounding context:\n"
+        if marker not in prompt:
+            return []
+        tail = prompt.split(marker, 1)[1]
+        stop_markers = ("\nCitations:", "\nReadiness:", "\nDeterministic checks:", "\nCompliance disclaimer:")
+        end = len(tail)
+        for stop in stop_markers:
+            idx = tail.find(stop)
+            if idx != -1:
+                end = min(end, idx)
+        context_block = tail[:end].strip()
+        lines = [line.strip() for line in context_block.splitlines() if line.strip().startswith("- ")]
+        return lines
+
+    @classmethod
+    def _compose_answer(cls, prompt: str) -> str:
+        intent = cls._extract_field(prompt, "Intent") or "general_query"
+        category = cls._extract_field(prompt, "Category") or "stocks"
+        query = cls._extract_field(prompt, "User query") or "User query not provided."
+        readiness = cls._extract_field(prompt, "Readiness") or "not available"
+        deterministic = cls._extract_field(prompt, "Deterministic checks") or "none"
+        disclaimer = cls._extract_field(prompt, "Compliance disclaimer")
+        context_lines = cls._extract_context_lines(prompt)
+        if context_lines:
+            context_summary = "\n".join(context_lines[:3])
+        else:
+            context_summary = "- No grounded context was available."
+        guidance_by_intent = {
+            "stock_analysis": "Focus on trend, momentum, volume confirmation, valuation context, and event risk.",
+            "fundamentals": "Focus on earnings quality, valuation metrics, balance-sheet strength, and sector positioning.",
+            "events_news": "Focus on regulatory impact, management commentary, and timeline of material disclosures.",
+            "prediction": "Focus on scenarios and risk factors; avoid directional certainty.",
+            "market_calculations": "Use deterministic outputs as checks and validate assumptions with live market data.",
+        }
+        guidance = guidance_by_intent.get(intent, "Prioritize grounded facts and validate with live NSE/BSE data.")
+        lines = [
+            f"Query focus: {query}",
+            f"Intent-category mapping: {intent} / {category}",
+            f"Data readiness snapshot: {readiness}",
+            "Grounded highlights:",
+            context_summary,
+        ]
+        if deterministic.lower() != "none":
+            lines.append(f"Deterministic checks: {deterministic}")
+        lines.append(f"Analysis guidance: {guidance}")
+        if disclaimer:
+            lines.append(f"Compliance note: {disclaimer}")
+        return "\n".join(lines)
 
 
 @dataclass(frozen=True)

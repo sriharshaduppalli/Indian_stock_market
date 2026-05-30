@@ -77,6 +77,8 @@ def test_stock_analysis_intent(tmp_path: Path) -> None:
 
     assert response.intent == "stock_analysis"
     assert "Relevant market context" in response.answer
+    assert "Grounded highlights:" in response.answer
+    assert "Analysis guidance:" in response.answer
 
 
 def test_calculation_query_has_deterministic_result(tmp_path: Path) -> None:
