@@ -141,3 +141,23 @@ def test_unsafe_prompt_is_refused_and_logged(tmp_path: Path) -> None:
     assert "can’t help" in response.answer
     assert response.confidence == 0.0
     assert response.policy_reason
+
+
+def test_intent_classification_falls_back_when_optional_nlp_backend_unavailable(tmp_path: Path) -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    config = AssistantConfig(
+        knowledge_base_path=repo_root / "data" / "sample_knowledge.json",
+        instrument_master_path=repo_root / "data" / "enterprise" / "instrument_master.json",
+        corporate_actions_path=repo_root / "data" / "enterprise" / "corporate_actions.json",
+        filings_path=repo_root / "data" / "enterprise" / "filings.json",
+        regulatory_updates_path=repo_root / "data" / "enterprise" / "regulatory_updates.json",
+        market_events_path=repo_root / "data" / "enterprise" / "market_events.json",
+        feedback_log_path=tmp_path / "feedback.log",
+        policy_audit_log_path=tmp_path / "policy.log",
+        release_registry_path=tmp_path / "releases.json",
+        latency_mode="fast",
+        nlp_backend="spacy",
+    )
+    assistant = StockMarketAssistant(config=config)
+    response = assistant.ask("Predict next week outlook for Indian IT stocks")
+    assert response.intent == "prediction"

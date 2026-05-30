@@ -49,6 +49,10 @@ Indian stock market data, analysis, prompts, queries, and LLM model scaffold wit
    ```bash
    pip install -r requirements.txt
    ```
+   Optional open-source NLP and market-data integrations:
+   ```bash
+   pip install -r requirements-optional.txt
+   ```
 2. Run tests:
    ```bash
    PYTHONPATH=src pytest -q
@@ -70,6 +74,10 @@ Indian stock market data, analysis, prompts, queries, and LLM model scaffold wit
    - `POST /query` (tenant-scoped query with `X-Tenant-Id`, `X-API-Key`, and JSON `{ "query": "..." }`)
 
 ## Production integration knobs
+- Optional open-source integration:
+  - `ISM_NLP_BACKEND` (`auto`/`spacy`/`nltk`/`basic`) to control tokenization/normalization for intent classification.
+  - `ISM_OPEN_SOURCE_MARKET_DATA_ENABLED` to enable `yfinance` + `nsepython` connector attempts before existing connectors.
+  - `ISM_OPEN_SOURCE_SYMBOLS` as comma-separated symbols for instrument master bootstrap (example: `RELIANCE.NS,INFY.NS,TCS.NS`).
 - Managed providers:
   - `ISM_EMBEDDING_PROVIDER`, `ISM_EMBEDDING_MODEL`, `ISM_EMBEDDING_ENDPOINT`, `ISM_EMBEDDING_API_KEY`
   - `ISM_RERANKER_PROVIDER`, `ISM_RERANKER_MODEL`, `ISM_RERANKER_ENDPOINT`, `ISM_RERANKER_API_KEY`

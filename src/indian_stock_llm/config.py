@@ -64,6 +64,9 @@ class AssistantConfig:
     rollout_inputs_endpoint: str | None = None
     rollout_inputs_api_key: str | None = None
     rollout_inputs_timeout_seconds: float = 2.0
+    nlp_backend: str = "auto"
+    open_source_market_data_enabled: bool = False
+    open_source_symbols: tuple[str, ...] = ("RELIANCE.NS", "TCS.NS", "INFY.NS")
 
 
 def default_config() -> AssistantConfig:
@@ -107,6 +110,14 @@ def _env_int(name: str, default: int) -> int:
         return int(value)
     except ValueError:
         return default
+
+
+def _env_csv(name: str, default: tuple[str, ...]) -> tuple[str, ...]:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    items = tuple(part.strip() for part in value.split(",") if part.strip())
+    return items or default
 
 
 def runtime_config_from_env(base: AssistantConfig | None = None) -> AssistantConfig:
@@ -165,5 +176,10 @@ def runtime_config_from_env(base: AssistantConfig | None = None) -> AssistantCon
             "rollout_inputs_timeout_seconds": _env_float(
                 "ISM_ROLLOUT_INPUTS_TIMEOUT_SECONDS", config.rollout_inputs_timeout_seconds
             ),
+            "nlp_backend": os.getenv("ISM_NLP_BACKEND", config.nlp_backend),
+            "open_source_market_data_enabled": _env_bool(
+                "ISM_OPEN_SOURCE_MARKET_DATA_ENABLED", config.open_source_market_data_enabled
+            ),
+            "open_source_symbols": _env_csv("ISM_OPEN_SOURCE_SYMBOLS", config.open_source_symbols),
         }
     )

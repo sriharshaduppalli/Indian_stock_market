@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from time import perf_counter
 from typing import TYPE_CHECKING
@@ -134,7 +135,86 @@ class HttpJsonProviderConnector:
         raise ConnectorFetchError(f"{self.provider}:{dataset} fetch failed: {last_error}") from last_error
 
 
+@dataclass(frozen=True)
+class OpenSourceStockConnector:
+    provider: str = "open_source"
+    symbols: tuple[str, ...] = ("RELIANCE.NS", "TCS.NS", "INFY.NS")
+
+    def supports_dataset(self, dataset: str) -> bool:
+        return dataset in {"instrument_master", "market_events"}
+
+    def fetch(self, dataset: str, timeout_seconds: float, retries: int) -> list[dict]:
+        attempts = max(1, retries + 1)
+        last_error: Exception | None = None
+        for _ in range(attempts):
+            started = perf_counter()
+            try:
+                if dataset == "instrument_master":
+                    rows = self._fetch_instrument_master()
+                elif dataset == "market_events":
+                    rows = self._fetch_market_events()
+                else:
+                    raise ConnectorFetchError(f"{self.provider} connector does not support dataset '{dataset}'")
+                elapsed = perf_counter() - started
+                if elapsed > timeout_seconds:
+                    raise TimeoutError(f"{self.provider}:{dataset} timed out")
+                return [item for item in rows if item]
+            except Exception as exc:
+                last_error = exc
+        raise ConnectorFetchError(f"{self.provider}:{dataset} fetch failed: {last_error}") from last_error
+
+    def _fetch_instrument_master(self) -> list[dict]:
+        try:
+            import yfinance as yf  # type: ignore
+        except Exception as exc:
+            raise RuntimeError("Install yfinance to enable open-source instrument feeds.") from exc
+        records: list[dict] = []
+        for symbol in self.symbols:
+            ticker = yf.Ticker(symbol)
+            info = getattr(ticker, "info", {}) or {}
+            row = normalize_record(
+                "instrument_master",
+                {
+                    "symbol": symbol,
+                    "company_name": info.get("shortName") or symbol,
+                    "isin": info.get("isin") or f"YF-{symbol.replace('.', '-')}",
+                    "exchange": info.get("exchange") or "NSE",
+                },
+                self.provider,
+            )
+            if row:
+                records.append(row)
+        return records
+
+    def _fetch_market_events(self) -> list[dict]:
+        try:
+            from nsepython import nse_marketStatus  # type: ignore
+        except Exception as exc:
+            raise RuntimeError("Install nsepython to enable open-source NSE market events.") from exc
+        payload = nse_marketStatus()
+        timestamp = datetime.now(timezone.utc).isoformat()
+        if isinstance(payload, dict):
+            payload = [payload]
+        rows: list[dict] = []
+        for item in payload if isinstance(payload, list) else []:
+            event_text = str(item.get("market", "NSE market status"))
+            status_text = str(item.get("marketStatus", item.get("status", "unknown")))
+            row = normalize_record(
+                "market_events",
+                {
+                    "event": f"{event_text}: {status_text}",
+                    "timestamp": timestamp,
+                    "source": "nsepython",
+                },
+                self.provider,
+            )
+            if row:
+                rows.append(row)
+        return rows
+
+
 def default_connectors(config: "AssistantConfig") -> tuple[SourceConnector, ...]:
+    base_connectors: tuple[SourceConnector, ...]
     if config.live_connectors_enabled:
         live_endpoints = {
             "nse": {
@@ -163,26 +243,39 @@ def default_connectors(config: "AssistantConfig") -> tuple[SourceConnector, ...]
                     )
                 )
         if live_connectors:
-            return tuple(live_connectors)
+            base_connectors = tuple(live_connectors)
+        else:
+            base_connectors = ()
+    else:
+        base_connectors = ()
 
-    return (
-        FileBackedProviderConnector(
-            provider="nse",
-            dataset_paths={
-                "instrument_master": config.instrument_master_path,
-                "corporate_actions": config.corporate_actions_path,
-            },
-        ),
-        FileBackedProviderConnector(
-            provider="bse",
-            dataset_paths={"filings": config.filings_path},
-        ),
-        FileBackedProviderConnector(
-            provider="regulatory",
-            dataset_paths={"regulatory_updates": config.regulatory_updates_path},
-        ),
-        FileBackedProviderConnector(
-            provider="news",
-            dataset_paths={"market_events": config.market_events_path},
-        ),
-    )
+    if not base_connectors:
+        base_connectors = (
+            FileBackedProviderConnector(
+                provider="nse",
+                dataset_paths={
+                    "instrument_master": config.instrument_master_path,
+                    "corporate_actions": config.corporate_actions_path,
+                },
+            ),
+            FileBackedProviderConnector(
+                provider="bse",
+                dataset_paths={"filings": config.filings_path},
+            ),
+            FileBackedProviderConnector(
+                provider="regulatory",
+                dataset_paths={"regulatory_updates": config.regulatory_updates_path},
+            ),
+            FileBackedProviderConnector(
+                provider="news",
+                dataset_paths={"market_events": config.market_events_path},
+            ),
+        )
+
+    if config.open_source_market_data_enabled:
+        return (
+            OpenSourceStockConnector(symbols=config.open_source_symbols),
+            *base_connectors,
+        )
+
+    return base_connectors

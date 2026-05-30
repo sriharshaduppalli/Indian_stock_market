@@ -32,6 +32,42 @@ INTENT_KEYWORDS = {
 MAX_CONFIDENCE = 0.95
 BASE_CONTEXT_CONFIDENCE = 0.65
 CONFIDENCE_PER_CONTEXT_ITEM = 0.1
+_SPACY_PIPELINE = None
+
+
+def _regex_tokens(query: str) -> set[str]:
+    return {m.group(0) for m in re.finditer(r"[a-z0-9]+", query.lower())}
+
+
+def _nlp_tokens(query: str, backend: str) -> set[str]:
+    selected = (backend or "auto").strip().lower()
+    if selected not in {"auto", "spacy", "nltk", "basic"}:
+        selected = "auto"
+    if selected in {"auto", "spacy"}:
+        global _SPACY_PIPELINE
+        try:
+            if _SPACY_PIPELINE is None:
+                import spacy  # type: ignore
+
+                _SPACY_PIPELINE = spacy.blank("en")
+            doc = _SPACY_PIPELINE(query.lower())
+            return {
+                (token.lemma_ or token.text).lower()
+                for token in doc
+                if not token.is_space and not token.is_punct and token.text.strip()
+            }
+        except Exception:
+            if selected == "spacy":
+                return _regex_tokens(query)
+    if selected in {"auto", "nltk"}:
+        try:
+            from nltk.tokenize import TweetTokenizer  # type: ignore
+
+            tokenizer = TweetTokenizer(strip_handles=True, reduce_len=True)
+            return {token.lower() for token in tokenizer.tokenize(query) if re.fullmatch(r"[a-z0-9]+", token.lower())}
+        except Exception:
+            return _regex_tokens(query)
+    return _regex_tokens(query)
 
 
 @dataclass(frozen=True)
@@ -111,8 +147,7 @@ class StockMarketAssistant:
         )
 
     def classify_intent(self, query: str) -> str:
-        q = query.lower()
-        tokens = {m.group(0) for m in re.finditer(r"[a-z0-9]+", q)}
+        tokens = _regex_tokens(query) | _nlp_tokens(query, self.config.nlp_backend)
         scores: dict[str, int] = {}
         for intent, keywords in INTENT_KEYWORDS.items():
             scores[intent] = len(tokens & keywords)

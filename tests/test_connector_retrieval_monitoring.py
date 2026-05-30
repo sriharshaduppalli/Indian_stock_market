@@ -6,7 +6,7 @@ from urllib import request
 
 from indian_stock_llm.config import AssistantConfig
 from indian_stock_llm.config import runtime_config_from_env
-from indian_stock_llm.connectors import HttpJsonProviderConnector
+from indian_stock_llm.connectors import HttpJsonProviderConnector, OpenSourceStockConnector, default_connectors
 from indian_stock_llm.data_layer import EnterpriseDataLayer
 from indian_stock_llm.evaluation import (
     AutomatedGateInputs,
@@ -277,6 +277,23 @@ def test_runtime_config_reads_managed_provider_and_rollout_ingestion_settings(mo
     assert config.model_name == "gpt-4o-mini"
     assert config.rollout_inputs_endpoint == "https://example.invalid/gate"
     assert config.rollout_inputs_api_key == "key"
+
+
+def test_runtime_config_reads_optional_nlp_and_open_source_connector_settings(monkeypatch) -> None:
+    monkeypatch.setenv("ISM_NLP_BACKEND", "nltk")
+    monkeypatch.setenv("ISM_OPEN_SOURCE_MARKET_DATA_ENABLED", "true")
+    monkeypatch.setenv("ISM_OPEN_SOURCE_SYMBOLS", "RELIANCE.NS,INFY.NS")
+    config = runtime_config_from_env()
+    assert config.nlp_backend == "nltk"
+    assert config.open_source_market_data_enabled is True
+    assert config.open_source_symbols == ("RELIANCE.NS", "INFY.NS")
+
+
+def test_default_connectors_include_open_source_connector_when_enabled(tmp_path: Path) -> None:
+    config = _config(tmp_path)
+    config = AssistantConfig(**{**config.__dict__, "open_source_market_data_enabled": True})
+    connectors = default_connectors(config)
+    assert isinstance(connectors[0], OpenSourceStockConnector)
 
 
 def test_load_automated_gate_inputs_from_endpoint(monkeypatch) -> None:
