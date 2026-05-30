@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from indian_stock_llm.calculations import PandasTaIndicatorCalculator
 from indian_stock_llm.config import AssistantConfig
 from indian_stock_llm.query_engine import StockMarketAssistant
 
@@ -105,10 +106,13 @@ def test_return_calculation_rejects_negative_sell_value(tmp_path: Path) -> None:
 
 def test_indicator_query_routes_to_market_calculations(tmp_path: Path) -> None:
     assistant = _assistant_with_repo_kb(tmp_path)
-    response = assistant.ask("Show RSI indicator for prices 100, 101, 102, 103, 104, 105")
+    query = "Show RSI indicator for prices 100, 101, 102, 103, 104, 105"
+    response = assistant.ask(query)
+    indicator_note = PandasTaIndicatorCalculator.indicator_note(query)
 
     assert response.intent == "market_calculations"
-    assert "Indicator calculation:" in response.answer
+    assert indicator_note is not None
+    assert "pandas-ta" in indicator_note.lower()
 
 
 def test_prediction_contains_policy_disclaimer(tmp_path: Path) -> None:
