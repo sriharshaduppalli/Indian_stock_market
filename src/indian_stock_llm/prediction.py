@@ -15,6 +15,7 @@ if TYPE_CHECKING:
 # Content signals used for directional scoring
 _BULLISH_TAGS = frozenset({"earnings", "guidance", "momentum", "fundamental", "growth"})
 _BEARISH_TAGS = frozenset({"risk", "uncertainty", "volatility", "regulation", "compliance"})
+_NONE_PLACEHOLDER = "none"
 _BULLISH_CONTENT = (
     "strong earnings",
     "deal win",
@@ -104,7 +105,7 @@ class PredictionEngine:
 
     @staticmethod
     def _build_signal(direction: str, probability: float, horizon: str, calc_note: str) -> HorizonSignal:
-        ind_note = f"; indicator context: {calc_note}" if calc_note and calc_note.strip().lower() != "none" else ""
+        ind_note = f"; indicator context: {calc_note}" if calc_note and calc_note.strip().lower() != _NONE_PLACEHOLDER else ""
         rationale = (
             f"{horizon} outlook is {direction} (estimated probability {probability:.0%}) "
             f"based on grounded knowledge-base context{ind_note}. "

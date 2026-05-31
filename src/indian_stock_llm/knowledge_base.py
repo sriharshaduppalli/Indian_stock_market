@@ -409,9 +409,8 @@ class MLReranker:
             self._trained = False
 
     def _sigmoid(self, features: list[float]) -> float:
-        import math as _math
         logit = self._intercept + sum(c * f for c, f in zip(self._coef, features))
-        return 1.0 / (1.0 + _math.exp(-logit))
+        return 1.0 / (1.0 + math.exp(-logit))
 
     def rerank(
         self,
