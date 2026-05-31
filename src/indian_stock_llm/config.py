@@ -67,6 +67,19 @@ class AssistantConfig:
     nlp_backend: str = "auto"
     open_source_market_data_enabled: bool = False
     open_source_symbols: tuple[str, ...] = ("RELIANCE.NS", "TCS.NS", "INFY.NS")
+    # Local semantic embedding (sentence-transformers)
+    embedding_local_model: str | None = None
+    # Nightly knowledge-base index refresh
+    nightly_refresh_enabled: bool = False
+    nightly_refresh_hour_utc: int = 2
+    # LoRA fine-tuning
+    training_base_model: str | None = None
+    training_lora_rank: int = 8
+    training_lora_alpha: int = 16
+    training_data_path: Path | None = None
+    training_output_path: Path | None = None
+    # ML-based reranker
+    reranker_local_model_path: Path | None = None
 
 
 def default_config() -> AssistantConfig:
@@ -181,5 +194,14 @@ def runtime_config_from_env(base: AssistantConfig | None = None) -> AssistantCon
                 "ISM_OPEN_SOURCE_MARKET_DATA_ENABLED", config.open_source_market_data_enabled
             ),
             "open_source_symbols": _env_csv("ISM_OPEN_SOURCE_SYMBOLS", config.open_source_symbols),
+            "embedding_local_model": os.getenv("ISM_EMBEDDING_LOCAL_MODEL", config.embedding_local_model),
+            "nightly_refresh_enabled": _env_bool("ISM_NIGHTLY_REFRESH_ENABLED", config.nightly_refresh_enabled),
+            "nightly_refresh_hour_utc": _env_int("ISM_NIGHTLY_REFRESH_HOUR_UTC", config.nightly_refresh_hour_utc),
+            "training_base_model": os.getenv("ISM_TRAINING_BASE_MODEL", config.training_base_model),
+            "training_lora_rank": _env_int("ISM_TRAINING_LORA_RANK", config.training_lora_rank),
+            "training_lora_alpha": _env_int("ISM_TRAINING_LORA_ALPHA", config.training_lora_alpha),
+            "training_data_path": Path(v) if (v := os.getenv("ISM_TRAINING_DATA_PATH")) else config.training_data_path,
+            "training_output_path": Path(v) if (v := os.getenv("ISM_TRAINING_OUTPUT_PATH")) else config.training_output_path,
+            "reranker_local_model_path": Path(v) if (v := os.getenv("ISM_RERANKER_LOCAL_MODEL_PATH")) else config.reranker_local_model_path,
         }
     )
