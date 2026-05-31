@@ -115,3 +115,84 @@ class ContinualLearningManager:
             return
         self._stop_event.set()
         self._worker.join(timeout=timeout_seconds)
+
+
+# Intent → representative tags used for knowledge-refresh prioritisation
+_INTENT_TOP_TAGS: dict[str, list[str]] = {
+    "fundamentals": ["fundamentals", "valuation"],
+    "events_news": ["sebi", "regulation"],
+    "market_calculations": ["calculation", "cagr"],
+    "prediction": ["prediction", "forecast"],
+    "stock_analysis": ["analysis", "technical"],
+    "portfolio": ["portfolio", "risk"],
+}
+
+
+class DailyFeedbackAnalyzer:
+    """Analyses daily feedback logs to surface intent distribution trends.
+
+    Supports both raw TSV lines (``ts\\tintent\\tquery``) and JSON lines
+    (``{"ts": ..., "intent": ..., "query_hash": ...}``).
+    """
+
+    def __init__(self, feedback_log_path: Path | None) -> None:
+        self.feedback_log_path = feedback_log_path
+
+    def analyze(self) -> dict[str, object]:
+        """Return a summary dict with intent counts and top intents."""
+        if self.feedback_log_path is None or not self.feedback_log_path.exists():
+            return {
+                "intent_counts": {},
+                "total_samples": 0,
+                "top_intents": [],
+                "ready": False,
+            }
+
+        intent_counts: dict[str, int] = {}
+        total = 0
+
+        with self.feedback_log_path.open("r", encoding="utf-8") as fp:
+            for line in fp:
+                text = line.strip()
+                if not text:
+                    continue
+                if text.startswith("{"):
+                    try:
+                        payload = json.loads(text)
+                        intent = str(payload.get("intent", "unknown"))
+                    except json.JSONDecodeError:
+                        continue
+                else:
+                    parts = text.split("\t")
+                    if len(parts) >= 2:
+                        intent = parts[1]
+                    else:
+                        continue
+                intent_counts[intent] = intent_counts.get(intent, 0) + 1
+                total += 1
+
+        top_intents = [i for i, _ in sorted(intent_counts.items(), key=lambda x: x[1], reverse=True)]
+        return {
+            "intent_counts": intent_counts,
+            "total_samples": total,
+            "top_intents": top_intents[:3],
+            "ready": total >= 10,
+        }
+
+    def suggested_knowledge_refresh_tags(self) -> list[str]:
+        """Return tags to prioritise when refreshing the knowledge-base index.
+
+        Tags are derived from the top-3 most frequent intents in the feedback log.
+        """
+        analysis = self.analyze()
+        tags: list[str] = []
+        for intent in analysis.get("top_intents", []):
+            tags.extend(_INTENT_TOP_TAGS.get(str(intent), []))
+        # Deduplicate while preserving order
+        seen: set[str] = set()
+        result: list[str] = []
+        for tag in tags:
+            if tag not in seen:
+                seen.add(tag)
+                result.append(tag)
+        return result[:6]
