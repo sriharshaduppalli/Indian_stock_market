@@ -37,6 +37,10 @@ class ChatApi:
         response["contract_version"] = API_CONTRACT_VERSION
         return {"status": result.get("status", "failed"), "response": response, "cached": result.get("cached", False)}
 
+    def refresh(self) -> None:
+        """Trigger an immediate knowledge-base index refresh."""
+        self.service.refresh()
+
 
 def build_chat_api(
     config: AssistantConfig,

@@ -20,46 +20,87 @@ Build a domain-focused assistant for Indian equities that answers user queries w
    - Predictive factors: news sentiment, event surprise score, sector-relative strength, liquidity regime.
    - Unstructured store: chunked documents with metadata.
 3. **Retrieval Layer (RAG)**
-   - Hybrid retrieval: keyword + semantic retrieval.
-   - Re-ranker for domain relevance (ticker, sector, time window).
+   - Hybrid retrieval: keyword + semantic retrieval with n-gram Jaccard scoring.
+   - `LocalHashEmbeddingProvider` (default, zero-dep) or `SentenceTransformerEmbeddingProvider` for real semantic embeddings (optional, `sentence-transformers`).
+   - `HeuristicReranker` (default) or `MLReranker` (logistic regression on self-supervised features, persists weights as JSON; requires `scikit-learn` for training only).
+   - `HttpReranker` for managed embedding/reranker endpoints.
+   - `KnowledgeBase.refresh_index()` rebuilds embeddings in-place; called automatically by the nightly refresh daemon.
 4. **Model Layer**
-   - Base LLM (instruction-tuned) + domain adaptation.
-   - Optional LoRA fine-tuning using Indian-market QA pairs.
+   - Base LLM (instruction-tuned) via `HttpModelBackend` or `TemplateModelBackend` (stub).
+   - Optional LoRA fine-tuning using Indian-market QA pairs via `LoRAFineTuner` (requires `transformers`, `peft`).
+   - `QAPairBuilder` converts knowledge-base items to instruction-tuning records (JSONL).
 5. **Prediction Layer**
-   - Multi-horizon prediction head (intraday / swing / medium-term probabilities).
-   - Combine time-series signals + live-news impact features.
-   - Calibrated confidence and uncertainty output.
-6. **Inference Orchestrator**
-   - Query intent classifier.
-   - Tool routing (quote lookup, fundamentals, event/news, portfolio what-if, prediction mode).
-   - Prompt builder with explicit context citations.
+   - `PredictionEngine` scores context items for bullish/bearish signals and generates multi-horizon predictions: intraday, swing (1–5 days), medium-term (1–3 months).
+   - Each horizon returns `direction`, `probability`, and `rationale`.
+   - Signals are serialized as `prediction_signals` in the `query()` response dict when intent is `"prediction"`.
+   - Max probability capped at 0.75; never claims certainty.
+6. **Inference Orchestrator** (`StockMarketAssistant`)
+   - Query intent classifier → tool routing → retrieval → reranking → response composition.
+   - Wires embedding provider, reranker, feedback analyzer, prediction engine, and nightly refresh daemon from `AssistantConfig`.
+   - `trigger_index_refresh()` for on-demand index rebuilds.
+   - `_start_nightly_refresh(hour_utc)` daemon thread for scheduled nightly rebuilds.
 7. **Continual Learning Layer**
-   - Daily feedback ingestion from user interactions and realized outcomes.
-   - Nightly refresh of retrieval index and factor weights.
-   - Scheduled fine-tuning cycles with drift detection triggers.
+   - Daily feedback ingestion from user interactions and realized outcomes (`ContinualLearningManager`).
+   - `DailyFeedbackAnalyzer` parses TSV and JSON-line log formats; returns intent distribution and readiness flag (≥10 samples).
+   - `suggested_knowledge_refresh_tags()` surfaces which knowledge topics to prioritize based on recent query patterns.
 8. **Evaluation Layer**
-   - Factuality and citation correctness.
-   - Domain benchmark set (earnings, ratios, corporate actions, sector trends).
-   - Response quality metrics: relevance, completeness, risk language, prediction calibration.
+   - `BenchmarkSuite` with 9 domain seed cases (fundamentals, prediction, events, calculations, safety).
+   - Metrics: `routing_accuracy`, `fact_accuracy`, `groundedness`, `hallucination_rate`, `safety_score`, `calculation_correctness`.
+   - `evaluate_release_gate()` gates production deployment on benchmark thresholds.
 9. **Low-Latency Serving Layer**
-   - Distilled/quantized fast model for online inference.
-   - Caching for repeated queries and hot tickers.
-   - Async retrieval + precomputed features to keep p95 latency low.
+   - `ChatService` with circuit-breaker, rate-limit, cache, SLO alerts, and tenant-scoped auth.
+   - `ChatService.refresh()` triggers an immediate knowledge-base index rebuild.
+   - `ChatApi.refresh()` exposes refresh via the stable v1 API contract.
+   - `POST /admin/refresh` HTTP endpoint (admin token gated) for ops-triggered rebuilds.
+   - `GET /health`, `GET /metrics`, `POST /query` existing routes unchanged.
 
 ## 4) Training and Daily Improvement Loop
 1. Collect domain corpus, live-news features, and QA seeds.
 2. Train retrieval index + baseline assistant + prediction head.
-3. Fine-tune with instruction data, preference pairs, and realized market outcomes.
-4. Run daily incremental update jobs (index refresh, factor recalibration, drift checks).
-5. Evaluate on benchmark + calibration metrics; run red-team prompts.
+3. Fine-tune with instruction data via `QAPairBuilder` → `LoRAFineTuner` (LoRA adapters).
+4. Run daily incremental update jobs (index refresh via `trigger_index_refresh`, factor recalibration, drift checks).
+5. Evaluate on `BenchmarkSuite`; run red-team prompts; check calibration metrics.
 6. Deploy with latency SLO monitoring and capture feedback for next-day learning.
 
-## 5) Initial Implementation Scope in this Repository
+## 5) CLI Subcommands
+```bash
+# Legacy direct query (backward compatible)
+python -m indian_stock_llm.cli "What are valuation risks in Indian IT stocks?"
+
+# Run the benchmark suite
+python -m indian_stock_llm.cli benchmark
+python -m indian_stock_llm.cli benchmark --json
+
+# Build QA pairs for fine-tuning
+python -m indian_stock_llm.cli train --output qa_pairs.json
+
+# Build QA pairs and run LoRA fine-tuning
+python -m indian_stock_llm.cli train --output qa_pairs.json --finetune \
+    --base-model google/flan-t5-base --lora-output ./adapter
+```
+
+## 6) Configuration (ISM_* env vars)
+| Variable | Purpose |
+|---|---|
+| `ISM_EMBEDDING_LOCAL_MODEL` | SentenceTransformer model name (e.g. `all-MiniLM-L6-v2`) |
+| `ISM_NIGHTLY_REFRESH_ENABLED` | Enable nightly index refresh daemon (`true`/`false`) |
+| `ISM_NIGHTLY_REFRESH_HOUR_UTC` | UTC hour for nightly refresh (integer) |
+| `ISM_TRAINING_BASE_MODEL` | HuggingFace base model for LoRA fine-tuning |
+| `ISM_TRAINING_LORA_RANK` | LoRA rank (integer, default 8) |
+| `ISM_TRAINING_LORA_ALPHA` | LoRA alpha (integer, default 16) |
+| `ISM_TRAINING_DATA_PATH` | Output path for QA pairs JSON |
+| `ISM_TRAINING_OUTPUT_PATH` | Output path for LoRA adapter weights |
+| `ISM_RERANKER_LOCAL_MODEL_PATH` | Path to persisted MLReranker weights JSON |
+
+## 7) Initial Implementation Scope in this Repository
 - A lightweight architecture scaffold with:
-  - Configurable knowledge base.
-  - Intent classification.
-  - Retrieval over local domain documents.
+  - Configurable knowledge base with real semantic embeddings (optional).
+  - Intent classification with 8 domain intents.
+  - Hybrid retrieval over local domain documents with ML-based reranking (optional).
   - Response composer with citations and safety disclaimer.
-  - Prediction intent response path with live-impact factor checklist.
-  - Continual-learning hook for daily feedback logs.
+  - Multi-horizon prediction signals for prediction-intent queries.
+  - LoRA fine-tuning infrastructure for domain adaptation.
+  - Benchmark suite with 9 domain seed cases.
+  - Nightly index refresh daemon and `/admin/refresh` endpoint.
+  - Continual-learning hook with intent distribution analysis.
 - This is the foundation to plug in a production LLM and real-time market connectors.

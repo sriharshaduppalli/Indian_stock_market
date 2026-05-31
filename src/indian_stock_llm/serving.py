@@ -400,3 +400,8 @@ class ChatService:
             "invalid_requests": float(self.metrics.invalid_requests),
             "circuit_open": self._circuit_open,
         }
+
+    def refresh(self) -> None:
+        """Trigger an immediate knowledge-base index refresh via the assistant."""
+        if hasattr(self.assistant, "trigger_index_refresh"):
+            self.assistant.trigger_index_refresh()

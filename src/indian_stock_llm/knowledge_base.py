@@ -70,6 +70,45 @@ class LocalHashEmbeddingProvider:
         return [_embedding(text) for text in texts]
 
 
+class SentenceTransformerEmbeddingProvider:
+    """Semantic embedding provider backed by a local sentence-transformers model.
+
+    Requires: pip install sentence-transformers  (in requirements-optional.txt)
+    Falls back gracefully to LocalHashEmbeddingProvider if the library is unavailable.
+    """
+
+    def __init__(self, model_name: str) -> None:
+        self.model_name = model_name
+        self._model = None
+
+    def _load_model(self):
+        if self._model is not None:
+            return self._model
+        try:
+            from sentence_transformers import SentenceTransformer  # type: ignore
+            self._model = SentenceTransformer(self.model_name)
+        except Exception:
+            self._model = None
+        return self._model
+
+    def encode(self, texts: list[str]) -> list[tuple[float, ...]]:
+        model = self._load_model()
+        if model is None:
+            return LocalHashEmbeddingProvider().encode(texts)
+        try:
+            embeddings = model.encode(texts, convert_to_numpy=True, show_progress_bar=False)
+            result: list[tuple[float, ...]] = []
+            for emb in embeddings:
+                vec = [float(v) for v in emb]
+                norm = math.sqrt(sum(v * v for v in vec))
+                if norm > 0:
+                    vec = [v / norm for v in vec]
+                result.append(tuple(vec))
+            return result
+        except Exception:
+            return LocalHashEmbeddingProvider().encode(texts)
+
+
 @dataclass(frozen=True)
 class HttpEmbeddingProvider:
     endpoint: str
@@ -228,6 +267,172 @@ class HttpReranker:
         return ranked
 
 
+class MLReranker:
+    """scikit-learn LogisticRegression reranker trained on knowledge-base items.
+
+    Training is self-supervised: positive pairs come from each item's own title+tags
+    as a query against itself; negatives use the same query against other items.
+    At inference time only pure Python is needed (no sklearn import required).
+
+    Model weights are persisted as JSON (no pickle) for portability and security.
+
+    Requires for training: pip install scikit-learn  (requirements-optional.txt)
+    """
+
+    _FEATURE_DIM = 5  # [kw_norm, semantic, embedding, intent_boost, token_subset]
+
+    def __init__(self, model_path: Path | None = None) -> None:
+        self._coef: list[float] = []
+        self._intercept: float = 0.0
+        self._trained: bool = False
+        self._fallback = HeuristicReranker()
+        if model_path is not None:
+            self._load(model_path)
+
+    # ------------------------------------------------------------------
+    # Feature extraction
+    # ------------------------------------------------------------------
+
+    def _extract_features(
+        self,
+        query: str,
+        intent: str | None,
+        item: KnowledgeItem,
+        keyword_score: int,
+        semantic_score: float,
+        embedding_score: float,
+    ) -> list[float]:
+        intent_boost = HeuristicReranker._intent_boost(intent, item)
+        query_tokens = _tokenize(query)
+        item_tokens = _tokenize(f"{item.title} {item.content} {' '.join(item.tags)}")
+        token_subset = 1.0 if query_tokens and query_tokens <= item_tokens else 0.0
+        return [
+            min(1.0, keyword_score / 5.0),
+            semantic_score,
+            min(1.0, embedding_score),
+            intent_boost,
+            token_subset,
+        ]
+
+    def _build_training_data(
+        self,
+        items: list[KnowledgeItem],
+        embedding_provider: EmbeddingProvider,
+    ) -> tuple[list[list[float]], list[int]]:
+        texts = [f"{item.title} {item.content} {' '.join(item.tags)}" for item in items]
+        try:
+            item_embeddings = embedding_provider.encode(texts)
+        except Exception:
+            item_embeddings = LocalHashEmbeddingProvider().encode(texts)
+
+        X: list[list[float]] = []
+        y: list[int] = []
+
+        for i, item in enumerate(items):
+            query = f"{item.title} {' '.join(item.tags[:3])}"
+            query_tokens = _tokenize(query)
+            try:
+                query_emb = embedding_provider.encode([query])[0]
+            except Exception:
+                query_emb = LocalHashEmbeddingProvider().encode([query])[0]
+
+            intent: str | None = None
+            for tag in item.tags:
+                for intent_key, tag_set in INTENT_TAG_PRIORS.items():
+                    if tag.lower() in tag_set:
+                        intent = intent_key
+                        break
+                if intent:
+                    break
+
+            for j, candidate in enumerate(items):
+                c_tokens = _tokenize(
+                    f"{candidate.title} {candidate.content} {' '.join(candidate.tags)}"
+                )
+                kw = len(query_tokens & c_tokens)
+                sem = (
+                    len(query_tokens & c_tokens) / len(query_tokens | c_tokens)
+                    if (query_tokens | c_tokens)
+                    else 0.0
+                )
+                emb = _cosine(query_emb, item_embeddings[j])
+                X.append(self._extract_features(query, intent, candidate, kw, sem, emb))
+                y.append(1 if i == j else 0)
+
+        return X, y
+
+    # ------------------------------------------------------------------
+    # Training, persistence, inference
+    # ------------------------------------------------------------------
+
+    def train(
+        self,
+        knowledge_base_items: list[KnowledgeItem],
+        embedding_provider: EmbeddingProvider,
+    ) -> None:
+        """Train the reranker from the knowledge base (self-supervised)."""
+        try:
+            from sklearn.linear_model import LogisticRegression  # type: ignore
+        except ImportError as exc:
+            raise RuntimeError(
+                "scikit-learn is required for MLReranker training. "
+                "Install it with: pip install scikit-learn"
+            ) from exc
+
+        X, y = self._build_training_data(knowledge_base_items, embedding_provider)
+        if len(X) < 4 or len(set(y)) < 2:
+            return
+
+        lr = LogisticRegression(max_iter=200, random_state=42)
+        lr.fit(X, y)
+        self._coef = lr.coef_[0].tolist()
+        self._intercept = float(lr.intercept_[0])
+        self._trained = True
+
+    def save(self, path: Path) -> None:
+        """Persist model weights as JSON (no pickle)."""
+        if not self._trained:
+            return
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps({"coef": self._coef, "intercept": self._intercept}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+    def _load(self, path: Path) -> None:
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            self._coef = [float(v) for v in data["coef"]]
+            self._intercept = float(data["intercept"])
+            self._trained = True
+        except Exception:
+            self._trained = False
+
+    def _sigmoid(self, features: list[float]) -> float:
+        logit = self._intercept + sum(c * f for c, f in zip(self._coef, features))
+        return 1.0 / (1.0 + math.exp(-logit))
+
+    def rerank(
+        self,
+        query: str,
+        intent: str | None,
+        scored_items: list[tuple[KnowledgeItem, float, int, float]],
+    ) -> list[tuple[KnowledgeItem, float, int, float]]:
+        if not self._trained or not self._coef:
+            return self._fallback.rerank(query, intent, scored_items)
+
+        item_probs: list[tuple[tuple[KnowledgeItem, float, int, float], float]] = []
+        for entry in scored_items:
+            item, score, keyword_score, semantic_score = entry
+            emb_score = max(0.0, score - keyword_score - semantic_score)
+            features = self._extract_features(query, intent, item, keyword_score, semantic_score, emb_score)
+            prob = self._sigmoid(features)
+            item_probs.append((entry, prob))
+
+        item_probs.sort(key=lambda pair: pair[1], reverse=True)
+        return [entry for entry, _ in item_probs]
+
+
 def _tokenize(text: str) -> set[str]:
     return {m.group(0).lower() for m in _WORD_RE.finditer(text) if m.group(0).lower() not in _STOPWORDS}
 
@@ -336,3 +541,25 @@ class KnowledgeBase:
 
         ranked = self.reranker.rerank(query=query, intent=intent, scored_items=scored)
         return [item for item, _, _, _ in ranked[:top_k]]
+
+    def refresh_index(self, new_items: list[KnowledgeItem] | None = None) -> None:
+        """Re-encode items with the current embedding provider.
+
+        If ``new_items`` is provided the knowledge base is replaced in-place
+        before re-encoding; this is useful after a nightly data refresh.
+        Otherwise only the embedding vectors are rebuilt, which is useful after
+        swapping to a better embedding provider.
+        """
+        if new_items is not None:
+            self.items = list(new_items)
+            self._item_tokens = [
+                _tokenize(f"{item.title} {item.content} {' '.join(item.tags)}")
+                for item in self.items
+            ]
+        texts = [
+            f"{item.title} {item.content} {' '.join(item.tags)}" for item in self.items
+        ]
+        try:
+            self._item_embeddings = self.embedding_provider.encode(texts)
+        except Exception:
+            self._item_embeddings = LocalHashEmbeddingProvider().encode(texts)

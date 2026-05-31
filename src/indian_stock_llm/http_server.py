@@ -138,6 +138,32 @@ def dispatch_http_request(
                 }
             )
         return HttpResponse(status_code=status_code, payload=response)
+    if method == "POST" and normalized_path == "/admin/refresh":
+        if metrics_admin_token and request_headers.get("x-admin-token") != metrics_admin_token:
+            if audit_logger:
+                audit_logger.log({"timestamp": now, "event": "admin_refresh", "status": "unauthorized"})
+            return HttpResponse(
+                status_code=HTTPStatus.UNAUTHORIZED,
+                payload={"status": "unauthorized", "error": "admin token required"},
+            )
+        if not hasattr(chat_api, "refresh"):
+            return HttpResponse(
+                status_code=HTTPStatus.NOT_IMPLEMENTED,
+                payload={"status": "not_supported", "error": "refresh not implemented by this API"},
+            )
+        try:
+            chat_api.refresh()
+            if audit_logger:
+                audit_logger.log({"timestamp": now, "event": "admin_refresh", "status": "ok"})
+            return HttpResponse(
+                status_code=HTTPStatus.OK,
+                payload={"status": "ok", "message": "knowledge base index refreshed"},
+            )
+        except Exception as exc:
+            return HttpResponse(
+                status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+                payload={"status": "failed", "error": str(exc)},
+            )
     return HttpResponse(
         status_code=HTTPStatus.NOT_FOUND,
         payload={"status": "not_found", "error": "Route not found"},
