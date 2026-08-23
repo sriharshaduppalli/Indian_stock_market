@@ -53,40 +53,156 @@ class TemplateModelBackend:
         return lines
 
     @classmethod
+    def _extract_market_context(cls, prompt: str) -> dict:
+        marker = "Live market context JSON:\n"
+        if marker not in prompt:
+            return {}
+        tail = prompt.split(marker, 1)[1]
+        stop = tail.find("\nGrounding context:")
+        block = (tail if stop < 0 else tail[:stop]).strip()
+        if not block or block == "none":
+            return {}
+        try:
+            import json
+
+            data = json.loads(block)
+            return data if isinstance(data, dict) else {}
+        except Exception:
+            return {}
+
+    @classmethod
     def _compose_answer(cls, prompt: str) -> str:
         intent = cls._extract_field(prompt, "Intent") or "general_query"
         category = cls._extract_field(prompt, "Category") or "stocks"
-        query = cls._extract_field(prompt, "User query") or "User query not provided."
-        readiness = cls._extract_field(prompt, "Readiness") or "not available"
-        deterministic = cls._extract_field(prompt, "Deterministic checks") or "none"
-        disclaimer = cls._extract_field(prompt, "Compliance disclaimer")
+        query = cls._extract_field(prompt, "User query")
         context_lines = cls._extract_context_lines(prompt)
-        if context_lines:
-            context_summary = "\n".join(context_lines[:3])
-        else:
-            context_summary = "- No grounded context was available."
-        guidance_by_intent = {
-            "stock_analysis": "Focus on trend, momentum, volume confirmation, valuation context, and event risk.",
-            "fundamentals": "Focus on earnings quality, valuation metrics, balance-sheet strength, and sector positioning.",
-            "events_news": "Focus on regulatory impact, management commentary, and timeline of material disclosures.",
-            "prediction": "Focus on scenarios and risk factors; avoid directional certainty.",
-            "market_calculations": "Use deterministic outputs as checks and validate assumptions with live market data.",
-        }
-        guidance = guidance_by_intent.get(intent, "Prioritize grounded facts and validate with live NSE/BSE data.")
-        lines = [
-            f"Query focus: {query}",
-            f"Intent-category mapping: {intent} / {category}",
-            f"Data readiness snapshot: {readiness}",
-            "Grounded highlights:",
-            context_summary,
-        ]
-        if deterministic.lower() != "none":
-            lines.append(f"Deterministic checks: {deterministic}")
-        lines.append(f"Analysis guidance: {guidance}")
-        if disclaimer:
-            lines.append(f"Compliance note: {disclaimer}")
-        return "\n".join(lines)
+        market_context = cls._extract_market_context(prompt)
+        deterministic = ""
+        marker = "Deterministic checks:\n"
+        if marker in prompt:
+            block = prompt.split(marker, 1)[1]
+            stop = block.find("\nCompliance disclaimer:")
+            deterministic = (block if stop < 0 else block[:stop]).strip()
+            if deterministic == "none":
+                deterministic = ""
 
+        try:
+            from .answer_composer import compose_structured_answer
+
+            structured = compose_structured_answer(
+                query=query,
+                intent=intent,
+                market_context=market_context,
+                context_lines=context_lines,
+                deterministic=deterministic,
+            )
+            if structured:
+                return structured
+
+            # Only soft-retry bare general_query + symbol. Never overwrite a
+            # focused intent (news / fundamentals / prediction) with full analysis.
+            symbol = ""
+            if isinstance(market_context, dict):
+                symbol = str(market_context.get("symbol") or "").strip().upper()
+            if symbol and intent in {"general_query", ""}:
+                try:
+                    from .answer_composer import resolve_stock_response_profile
+
+                    profile = resolve_stock_response_profile(query, intent or "general_query")
+                    retry_intent = {
+                        "news": "events_news",
+                        "sentiment": "events_news",
+                        "quote": "price_action",
+                        "technical": "stock_analysis",
+                        "risks": "events_news",
+                        "trade_plan": "price_action",
+                        "prediction": "prediction",
+                        "fundamentals": "fundamentals",
+                        "calculations": "market_calculations",
+                    }.get(profile, "stock_analysis")
+                except Exception:
+                    retry_intent = "stock_analysis"
+                if retry_intent != intent:
+                    structured = compose_structured_answer(
+                        query=query,
+                        intent=retry_intent,
+                        market_context=market_context,
+                        context_lines=context_lines,
+                        deterministic=deterministic,
+                    )
+                    if structured:
+                        return structured
+        except Exception:
+            pass
+
+        # Never dump Live quote / Full math / Live enrich bullets as the user answer.
+        symbol = ""
+        if isinstance(market_context, dict):
+            symbol = str(market_context.get("symbol") or "").strip().upper()
+        if symbol:
+            return (
+                f"**{symbol}**\n\n"
+                "I couldn't build a clean paper-practice summary from live feeds just now.\n\n"
+                f"Try: “Should I buy {symbol}?”, “{symbol} sentiment”, or "
+                f"“full math for {symbol}”.\n\n"
+                "_Educational only — not investment advice._"
+            )
+
+        headers = {
+            "market_calculations": "Indian market equations & calculations",
+            "fundamentals": "Fundamental snapshot",
+            "stock_analysis": "Stock analysis notes",
+            "prediction": "Forecast framing (not a guarantee)",
+            "portfolio": "Portfolio guidance",
+            "derivatives": "F&O / derivatives notes",
+            "events_news": "Market / regulatory context",
+            "price_action": "Price-action notes",
+            "compare": "Comparison notes",
+            "sector_screen": "Sector screen",
+            "overbought_check": "Overbought / oversold check",
+            "market_literacy": "How the stock market works (beginner)",
+            "general_query": "Indian market knowledge",
+        }
+        title = headers.get(intent, f"Indian market insight ({category})")
+        parts = [f"**{title}**", ""]
+
+        # Literacy / education only: keep short, non-raw snippets (skip live dumps).
+        cleaned: list[str] = []
+        for line in context_lines[:6]:
+            text = line[2:].strip() if line.startswith("- ") else line
+            low = text.lower()
+            if any(
+                bad in low
+                for bad in (
+                    "live quote",
+                    "live enrich",
+                    "full math for",
+                    "quantitative + trade plan",
+                    "wilder rsi",
+                    "data_degraded",
+                )
+            ):
+                continue
+            if "NSE market status" in text:
+                text = text.split("NSE market status")[0].strip().rstrip(".")
+            if text and len(text) < 280:
+                cleaned.append(text)
+        if cleaned:
+            for text in cleaned[:4]:
+                parts.append(f"• {text}")
+        else:
+            parts.append(
+                "Ask about a specific NSE/BSE symbol (e.g. “KAYNES sentiment”) "
+                "or a market concept (e.g. “what is RSI?”)."
+            )
+
+        parts.extend(
+            [
+                "",
+                "_Grounded by BYSEL._",
+            ]
+        )
+        return "\n".join(parts)
 
 @dataclass(frozen=True)
 class HttpModelBackend:
@@ -157,12 +273,14 @@ class ModelOrchestrator:
         deterministic_note: str,
         policy_disclaimer: str,
         readiness_note: str,
+        market_context_json: str = "none",
     ) -> str:
         citation_text = ", ".join(citations) if citations else "none"
         return (
             f"Intent: {intent}\n"
             f"Category: {category}\n"
             f"User query: {query.strip()}\n"
+            f"Live market context JSON:\n{market_context_json or 'none'}\n"
             f"Grounding context:\n{context_text}\n"
             f"Citations: {citation_text}\n"
             f"Readiness: {readiness_note}\n"

@@ -39,12 +39,23 @@ _STOPWORDS = {
 }
 EMBEDDING_DIM = 64
 INTENT_TAG_PRIORS = {
-    "fundamentals": {"fundamentals", "valuation", "pe"},
-    "events_news": {"sebi", "regulation", "guidance", "earnings"},
-    "market_calculations": {"calculation", "cagr", "return", "volatility", "rsi", "sma", "ema", "macd", "bollinger"},
+    "fundamentals": {"fundamentals", "valuation", "pe", "roe", "eps", "pb"},
+    "events_news": {"sebi", "regulation", "guidance", "earnings", "events"},
+    "market_calculations": {
+        "calculation", "cagr", "return", "volatility", "rsi", "sma", "ema",
+        "macd", "bollinger", "equation", "indicator", "atr", "vwap", "sharpe",
+    },
     "prediction": {"prediction", "forecast", "uncertainty", "risk"},
-    "stock_analysis": {"analysis", "technical", "fundamental", "earnings"},
-    "portfolio": {"portfolio", "risk", "diversification"},
+    "stock_analysis": {"analysis", "technical", "fundamental", "earnings", "checklist"},
+    "portfolio": {"portfolio", "risk", "diversification", "sip"},
+    "market_literacy": {
+        "beginner", "education", "nse", "bse", "sebi", "demat", "ipo", "settlement",
+        "depository", "nsdl", "cdsl", "participants", "mistakes", "kyc",
+        "technical", "candlestick", "fibonacci", "volume", "pivot",
+        "nseindia", "circular", "holiday", "ncfm", "lot",
+        "option chain", "asm", "cas", "pre-open", "indices",
+    },
+    "general_query": {"stocks", "symbols", "nse", "bse", "terms"},
 }
 
 
@@ -474,18 +485,105 @@ class KnowledgeBase:
         embedding_provider: EmbeddingProvider | None = None,
         vector_index: VectorIndex | None = None,
         reranker: Reranker | None = None,
+        embedding_cache_path: Path | None = None,
     ):
         self.items = list(items)
         self._item_tokens = [_tokenize(f"{item.title} {item.content} {' '.join(item.tags)}") for item in self.items]
         self.embedding_provider = embedding_provider or LocalHashEmbeddingProvider()
         self.vector_index = vector_index or InMemoryVectorIndex()
         self.reranker = reranker or HeuristicReranker()
+        self.embedding_cache_path = embedding_cache_path
         texts = [f"{item.title} {item.content} {' '.join(item.tags)}" for item in self.items]
         try:
             self._item_embeddings = self.embedding_provider.encode(texts)
         except Exception:
+            # Hash fallback on encode failure (keeps retrieval working without MiniLM / HTTP).
             self.embedding_provider = LocalHashEmbeddingProvider()
             self._item_embeddings = self.embedding_provider.encode(texts)
+        if embedding_cache_path is not None and embedding_cache_path.exists():
+            loaded = self.load_embedding_cache(embedding_cache_path)
+            # Persist after merge (covers newly encoded missing ids) or refresh stale/incompatible cache.
+            try:
+                self.save_embedding_cache(embedding_cache_path)
+            except Exception:
+                pass
+            _ = loaded
+        elif embedding_cache_path is not None:
+            try:
+                self.save_embedding_cache(embedding_cache_path)
+            except Exception:
+                pass
+
+    def save_embedding_cache(self, path: Path) -> None:
+        """Persist ``{item_id: [floats...]}`` so cold starts can skip full re-encode."""
+        path.parent.mkdir(parents=True, exist_ok=True)
+        payload: dict[str, list[float]] = {}
+        for item, emb in zip(self.items, self._item_embeddings):
+            payload[item.id] = [float(v) for v in emb]
+        path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+    def load_embedding_cache(self, path: Path) -> bool:
+        """Load cached embeddings; merge matches and re-encode missing ids.
+
+        Returns True if every current item was satisfied from cache (or merge +
+        partial re-encode succeeded with compatible dimensions). Returns False
+        if the cache is unusable and the caller should keep freshly encoded vectors.
+        """
+        if not path.exists() or not self.items:
+            return False
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            return False
+        if not isinstance(raw, dict):
+            return False
+
+        current_ids = [item.id for item in self.items]
+        cached: dict[str, list[float]] = {}
+        for key, value in raw.items():
+            if isinstance(value, list) and value and all(isinstance(v, (int, float)) for v in value):
+                cached[str(key)] = [float(v) for v in value]
+
+        if not cached:
+            return False
+
+        sample_dim = len(next(iter(cached.values())))
+        if self._item_embeddings and len(self._item_embeddings[0]) != sample_dim:
+            # Dimension mismatch (e.g. hash-64 vs MiniLM-384) — ignore cache.
+            return False
+
+        missing_indices: list[int] = []
+        merged: list[tuple[float, ...]] = []
+        for idx, item_id in enumerate(current_ids):
+            if item_id in cached and len(cached[item_id]) == sample_dim:
+                merged.append(tuple(cached[item_id]))
+            else:
+                missing_indices.append(idx)
+                merged.append(tuple())  # placeholder
+
+        if missing_indices:
+            miss_texts = [
+                f"{self.items[i].title} {self.items[i].content} {' '.join(self.items[i].tags)}"
+                for i in missing_indices
+            ]
+            try:
+                miss_embs = self.embedding_provider.encode(miss_texts)
+            except Exception:
+                miss_embs = LocalHashEmbeddingProvider().encode(miss_texts)
+            if miss_embs and len(miss_embs[0]) != sample_dim and any(merged[i] for i in range(len(merged)) if merged[i]):
+                # Re-encoded vectors incompatible with cached dim — abort merge.
+                return False
+            if miss_embs:
+                sample_dim = len(miss_embs[0])
+            for local_i, global_i in enumerate(missing_indices):
+                merged[global_i] = miss_embs[local_i]
+        elif not all(len(row) == sample_dim for row in merged if row):
+            return False
+
+        if any(not row for row in merged):
+            return False
+        self._item_embeddings = merged
+        return True
 
     @classmethod
     def from_json(
@@ -494,10 +592,24 @@ class KnowledgeBase:
         embedding_provider: EmbeddingProvider | None = None,
         vector_index: VectorIndex | None = None,
         reranker: Reranker | None = None,
+        extra_items: Iterable[KnowledgeItem] | None = None,
+        embedding_cache_path: Path | None = None,
     ) -> KnowledgeBase:
-        data = json.loads(path.read_text(encoding="utf-8"))
-        items = [KnowledgeItem(**item) for item in data]
-        return cls(items, embedding_provider=embedding_provider, vector_index=vector_index, reranker=reranker)
+        data = json.loads(path.read_text(encoding="utf-8")) if path.exists() else []
+        items = [KnowledgeItem(**item) for item in data if isinstance(item, dict)]
+        if extra_items:
+            seen = {item.id for item in items}
+            for item in extra_items:
+                if item.id not in seen:
+                    items.append(item)
+                    seen.add(item.id)
+        return cls(
+            items,
+            embedding_provider=embedding_provider,
+            vector_index=vector_index,
+            reranker=reranker,
+            embedding_cache_path=embedding_cache_path,
+        )
 
     def _semantic_score(self, query_tokens: set[str], item_tokens: set[str]) -> float:
         if not query_tokens or not item_tokens:

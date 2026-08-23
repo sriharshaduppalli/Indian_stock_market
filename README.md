@@ -2,6 +2,8 @@
 
 Indian stock market data, analysis, prompts, queries, and LLM model scaffold with production-hardening controls.
 
+BYSEL consumes this package from tag `bysel-ism-v2026.08.23` (`backend/vendor/indian_stock_market` in the BYSEL repo). Update BYSEL by moving that submodule to a newer tag after you publish it here.
+
 ## What is implemented
 - High-level architecture in `ARCHITECTURE.md`
 - Initial local assistant scaffold for Indian stock market Q&A:

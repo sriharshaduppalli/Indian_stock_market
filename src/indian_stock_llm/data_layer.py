@@ -175,14 +175,43 @@ class EnterpriseDataLayer:
         return self._snapshot
 
     def resolve_entity(self, query: str) -> dict | None:
-        q = query.lower()
+        """Resolve a ticker from the query without false hits on English words.
+
+        Prefer exact uppercase symbol tokens (RELIANCE, TCS). Avoid substring
+        matches like FOCUS inside unrelated sentences / common words.
+        """
+        import re
+
+        # Common English / market words that collide with rare tickers.
+        stop = {
+            "focus", "power", "india", "indian", "bank", "life", "tech", "info",
+            "national", "union", "general", "future", "capital", "global", "next",
+            "one", "energy", "growth", "value", "money", "trade", "market", "stock",
+            "share", "price", "target", "swing", "hold", "buy", "sell", "top",
+            "best", "how", "what", "does", "work", "settlement", "circuit",
+        }
+        tokens = {t.upper() for t in re.findall(r"[A-Za-z][A-Za-z0-9.&-]{1,20}", query or "")}
+        best: dict | None = None
+        best_len = 0
         for item in self._snapshot.instrument_master:
-            candidates = (
-                str(item.get("symbol", "")).lower(),
-                str(item.get("company_name", "")).lower(),
-                str(item.get("isin", "")).lower(),
-            )
-            if any(candidate and candidate in q for candidate in candidates):
+            sym = str(item.get("symbol", "") or "").upper().strip()
+            if not sym or len(sym) < 2:
+                continue
+            if sym.lower() in stop:
+                continue
+            if sym in tokens and len(sym) > best_len:
+                best = item
+                best_len = len(sym)
+        if best:
+            return best
+
+        # Company-name fallback: whole-word phrase only, length >= 5.
+        q = (query or "").lower()
+        for item in self._snapshot.instrument_master:
+            name = str(item.get("company_name", "") or "").strip().lower()
+            if len(name) < 5 or name in stop:
+                continue
+            if re.search(r"\b" + re.escape(name) + r"\b", q):
                 return item
         return None
 

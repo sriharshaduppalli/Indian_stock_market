@@ -80,6 +80,11 @@ class AssistantConfig:
     training_output_path: Path | None = None
     # ML-based reranker
     reranker_local_model_path: Path | None = None
+    # Closed-loop RAG learning (improves retrieval KB over time — NOT LoRA auto-train)
+    learned_knowledge_path: Path | None = None
+    embedding_cache_path: Path | None = None
+    feedback_learning_enabled: bool = True
+    feedback_promote_min_count: int = 3
 
 
 def default_config() -> AssistantConfig:
@@ -94,6 +99,10 @@ def default_config() -> AssistantConfig:
         feedback_log_path=root / "data" / "daily_feedback.log",
         policy_audit_log_path=root / "data" / "policy_audit.log",
         release_registry_path=root / "data" / "release_registry.json",
+        learned_knowledge_path=root / "data" / "learned_knowledge.json",
+        embedding_cache_path=root / "data" / "embedding_cache.json",
+        feedback_learning_enabled=True,
+        feedback_promote_min_count=3,
         latency_mode="fast",
     )
 
@@ -203,5 +212,9 @@ def runtime_config_from_env(base: AssistantConfig | None = None) -> AssistantCon
             "training_data_path": Path(v) if (v := os.getenv("ISM_TRAINING_DATA_PATH")) else config.training_data_path,
             "training_output_path": Path(v) if (v := os.getenv("ISM_TRAINING_OUTPUT_PATH")) else config.training_output_path,
             "reranker_local_model_path": Path(v) if (v := os.getenv("ISM_RERANKER_LOCAL_MODEL_PATH")) else config.reranker_local_model_path,
+            "learned_knowledge_path": Path(v) if (v := os.getenv("ISM_LEARNED_KNOWLEDGE_PATH")) else config.learned_knowledge_path,
+            "embedding_cache_path": Path(v) if (v := os.getenv("ISM_EMBEDDING_CACHE_PATH")) else config.embedding_cache_path,
+            "feedback_learning_enabled": _env_bool("ISM_FEEDBACK_LEARNING_ENABLED", config.feedback_learning_enabled),
+            "feedback_promote_min_count": _env_int("ISM_FEEDBACK_PROMOTE_MIN_COUNT", config.feedback_promote_min_count),
         }
     )
