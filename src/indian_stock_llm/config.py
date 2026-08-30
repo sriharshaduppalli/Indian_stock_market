@@ -65,6 +65,7 @@ class AssistantConfig:
     rollout_inputs_api_key: str | None = None
     rollout_inputs_timeout_seconds: float = 2.0
     nlp_backend: str = "auto"
+    language_graph_enabled: bool = True
     open_source_market_data_enabled: bool = False
     open_source_symbols: tuple[str, ...] = ("RELIANCE.NS", "TCS.NS", "INFY.NS")
     # Local semantic embedding (sentence-transformers)
@@ -199,6 +200,9 @@ def runtime_config_from_env(base: AssistantConfig | None = None) -> AssistantCon
                 "ISM_ROLLOUT_INPUTS_TIMEOUT_SECONDS", config.rollout_inputs_timeout_seconds
             ),
             "nlp_backend": os.getenv("ISM_NLP_BACKEND", config.nlp_backend),
+            "language_graph_enabled": _env_bool(
+                "ISM_LANGUAGE_GRAPH_ENABLED", config.language_graph_enabled
+            ),
             "open_source_market_data_enabled": _env_bool(
                 "ISM_OPEN_SOURCE_MARKET_DATA_ENABLED", config.open_source_market_data_enabled
             ),

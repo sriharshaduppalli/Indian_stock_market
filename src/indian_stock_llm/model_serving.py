@@ -88,13 +88,22 @@ class TemplateModelBackend:
 
         try:
             from .answer_composer import compose_structured_answer
+            from .query_contract import resolve_query_contract
 
+            contract_profile = ""
+            try:
+                contract_profile = resolve_query_contract(
+                    query, intent_hint=intent
+                ).profile
+            except Exception:
+                contract_profile = ""
             structured = compose_structured_answer(
                 query=query,
                 intent=intent,
                 market_context=market_context,
                 context_lines=context_lines,
                 deterministic=deterministic,
+                profile=contract_profile or None,
             )
             if structured:
                 return structured
@@ -129,6 +138,7 @@ class TemplateModelBackend:
                         market_context=market_context,
                         context_lines=context_lines,
                         deterministic=deterministic,
+                        profile=profile,
                     )
                     if structured:
                         return structured

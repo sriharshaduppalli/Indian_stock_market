@@ -246,6 +246,20 @@ class DailyFeedbackAnalyzer:
                 result.append(tag)
         return result[:6]
 
+    def cluster_misses(self) -> dict[str, object]:
+        """Phrase clusters for human review. Never writes learned_knowledge.json."""
+        try:
+            from app.miss_cluster import cluster_and_write
+
+            return cluster_and_write(log_path=self.feedback_log_path)
+        except Exception:
+            return {
+                "total_lines": 0,
+                "miss_count": 0,
+                "clusters": [],
+                "note": "Human review only. Do not auto-promote into learned_knowledge.json.",
+            }
+
 
 # Educational framing only — process coaching, never tips / guaranteed returns.
 _INTENT_COACHING: dict[str, str] = {

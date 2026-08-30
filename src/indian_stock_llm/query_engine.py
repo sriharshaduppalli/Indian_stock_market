@@ -51,6 +51,8 @@ INTENT_KEYWORDS = {
         "scalper", "swing", "holding", "cagr", "absolute", "varsity", "opinions",
         "candlestick", "marubozu", "doji", "hammer", "engulfing", "fibonacci",
         "technical", "volume", "cpr", "dow",
+        "opening", "range", "cas", "chop", "fomo", "revenge", "weekend",
+        "habit", "sip", "ter", "nav", "drhp", "sgb",
     },
     "portfolio": {
         "portfolio", "allocation", "risk", "diversification", "sip",
@@ -504,6 +506,15 @@ class StockMarketAssistant:
             # Prefer price_action over generic sector tokens in the same sentence.
             if not re.search(r"\b(top|best)\s+\w+\s+stocks?\b", qlow):
                 return "price_action"
+        if getattr(self.config, "language_graph_enabled", True):
+            try:
+                from .language_graph import build_language_graph
+
+                graph = build_language_graph(normalized)
+                if graph.intent_hint and graph.confidence >= 78 and not named_for_ta:
+                    return graph.intent_hint
+            except Exception:
+                pass
         tokens = _regex_tokens(normalized) | _nlp_tokens(normalized, self.config.nlp_backend)
         scores: dict[str, int] = {}
         for intent, keywords in INTENT_KEYWORDS.items():
@@ -762,8 +773,18 @@ class StockMarketAssistant:
                 "isin": (resolved_entity or {}).get("isin") or "n/a",
             }
         # Soft retrieval — do not hard-filter by tag (that emptied results before).
+        search_query = learn_query or query
+        if getattr(self.config, "language_graph_enabled", True):
+            try:
+                from .language_graph import graph_retrieval_query
+
+                expanded = graph_retrieval_query(search_query)
+                if expanded:
+                    search_query = expanded
+            except Exception:
+                pass
         context_items = self.knowledge_base.search(
-            learn_query or query,
+            search_query,
             top_k=self.config.top_k_context,
             min_score=self.config.min_retrieval_score,
             metadata_filters=None,
@@ -1016,6 +1037,10 @@ class StockMarketAssistant:
                                 or (market_context.get("p0_math") or {}).get("trade_plan")
                                 or {}
                             ),
+                            "user_sentiment": market_context.get("user_sentiment") or {},
+                            "query_nlu": market_context.get("query_nlu") or {},
+                            "conversation": market_context.get("conversation") or {},
+                            "portfolio_context": market_context.get("portfolio_context") or {},
                         },
                         ensure_ascii=False,
                     )

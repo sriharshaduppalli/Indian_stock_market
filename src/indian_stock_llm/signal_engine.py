@@ -79,19 +79,19 @@ def build_trade_plan(pack: dict[str, Any], *, horizon: str = "swing") -> dict[st
     if rsi is not None:
         if rsi <= 30:
             score += 2
-            reasons.append(f"Wilder RSI {_fmt(rsi)} oversold — bounce/watchlist zone")
+            reasons.append(f"RSI {_fmt(rsi)} is washed out — bounce/watchlist zone")
         elif rsi >= 70:
             score -= 2
-            against.append(f"Wilder RSI {_fmt(rsi)} overbought — avoid chasing")
+            against.append(f"RSI {_fmt(rsi)} is stretched — avoid chasing")
         elif 45 <= rsi <= 60:
             score += 1
-            reasons.append(f"Wilder RSI {_fmt(rsi)} mid-healthy")
+            reasons.append(f"RSI {_fmt(rsi)} is mid-range")
         elif rsi > 60:
             score += 1
-            reasons.append(f"Wilder RSI {_fmt(rsi)} bullish momentum")
+            reasons.append(f"RSI {_fmt(rsi)} shows bullish momentum")
         else:
             score -= 1
-            against.append(f"Wilder RSI {_fmt(rsi)} soft")
+            against.append(f"RSI {_fmt(rsi)} is soft")
 
     if "bullish divergence" in div:
         score += 2
@@ -187,10 +187,10 @@ def build_trade_plan(pack: dict[str, Any], *, horizon: str = "swing") -> dict[st
         reasons.append(f"PEG {_fmt(peg, 2)} reasonable vs growth")
     if ev is not None and 0 < ev < 12:
         score += 1
-        reasons.append(f"EV/EBITDA {_fmt(ev)} not stretched")
+        reasons.append("Valuation multiple is not stretched")
     elif ev is not None and ev > 25:
         score -= 1
-        against.append(f"EV/EBITDA {_fmt(ev)} elevated")
+        against.append("Valuation multiple looks elevated")
     if sector_prem is not None and sector_prem > 40:
         score -= 1
         against.append(f"Sector PE premium +{sector_prem:.0f}% stretched vs peers")
@@ -231,7 +231,7 @@ def build_trade_plan(pack: dict[str, Any], *, horizon: str = "swing") -> dict[st
     if action in {"BUY", "ACCUMULATE"} and rsi is not None:
         if rsi >= 70 and h in {"intraday", "week", "weekly", "swing"}:
             action = "TRIM" if rsi >= 75 else "HOLD"
-            against.append("Overbought veto: no fresh BUY while Wilder RSI ≥ 70 on this horizon")
+            against.append("No fresh BUY while RSI is stretched on this horizon")
             score = min(score, 1)
         elif rsi >= 68 and h in {"intraday", "week", "weekly"} and action == "BUY":
             action = "ACCUMULATE"

@@ -3211,43 +3211,31 @@ def format_sentiment_card(pack: dict[str, Any]) -> str:
     lines = [
         title,
         "",
-        f"**Overall:** {pack.get('label')} "
-        f"(score {pack.get('composite_score'):+.2f}, confidence {pack.get('confidence')})",
+        f"**Overall:** {pack.get('label')}",
         f"**Read:** {pack.get('summary')}",
         "",
-        "**Factor stack:**",
+        "**What is driving the mood:**",
     ]
     for f in pack.get("factors") or []:
-        sc = f.get("score")
-        sc_txt = f"{sc:+.2f}" if isinstance(sc, (int, float)) else "n/a"
-        lines.append(f"• {f.get('name')}: {f.get('label')} [{sc_txt}]")
+        if f.get("name") and f.get("label"):
+            lines.append(f"• {f.get('name')}: {f.get('label')}")
     news = pack.get("news") or {}
     if news.get("ok"):
         lines.append("")
-        lines.append(
-            f"**News tone:** {news.get('overall')} — {news.get('breakdown')}"
-        )
-        for t in (news.get("tagged") or [])[:4]:
-            if isinstance(t, dict) and t.get("title"):
-                sc = t.get("score")
-                sc_txt = f"{sc:+.2f}" if isinstance(sc, (int, float)) else ""
-                pol = t.get("polarity") or "neutral"
-                suffix = f" {sc_txt}" if sc_txt else ""
-                lines.append(f"  – ({pol}{suffix}) {t.get('title')[:120]}")
-                for sent in (t.get("sentences") or [])[:2]:
-                    if not isinstance(sent, dict) or not sent.get("text"):
-                        continue
-                    if sent.get("text") == t.get("title"):
-                        continue
-                    s_pol = sent.get("polarity") or "neutral"
-                    lines.append(f"      · [{s_pol}] {str(sent.get('text'))[:100]}")
-        # Standalone sentence cues when tagged is thin.
-        if not news.get("tagged"):
-            for sent in (news.get("sentences") or [])[:4]:
-                if isinstance(sent, dict) and sent.get("text"):
-                    lines.append(
-                        f"  – ({sent.get('polarity')}) {str(sent.get('text'))[:120]}"
-                    )
+        lines.append(f"**News sentences:** {news.get('overall')}")
+        sentence_rows = list(news.get("sentences") or [])
+        shown = 0
+        for sent in sentence_rows[:5]:
+            if not isinstance(sent, dict) or not sent.get("text"):
+                continue
+            pol = sent.get("polarity") or "neutral"
+            lines.append(f"• ({pol}) {str(sent.get('text'))[:140]}")
+            shown += 1
+        if shown == 0:
+            for t in (news.get("tagged") or [])[:4]:
+                if isinstance(t, dict) and t.get("title"):
+                    pol = t.get("polarity") or "neutral"
+                    lines.append(f"• ({pol}) {t.get('title')[:140]}")
     lines.extend(
         [
             "",

@@ -599,6 +599,9 @@ class PandasTaIndicatorCalculator:
         "bullish", "bearish", "neutral", "factor", "factors",
         "buy", "sell", "hold", "wait", "trim", "accumulate", "action",
         "paper", "practice", "legend", "direct", "answer",
+        "beginner", "beginners", "teach", "learn", "habit", "habits",
+        "educational", "education",
+        "nav", "sip", "ter", "cas", "fomo", "sgb", "drhp", "etf",
     }
 
     @classmethod

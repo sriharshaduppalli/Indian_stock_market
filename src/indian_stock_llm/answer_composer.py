@@ -229,6 +229,8 @@ def normalize_market_context(ctx: dict[str, Any] | None) -> dict[str, Any]:
         "user_sentiment": (
             raw.get("user_sentiment") if isinstance(raw.get("user_sentiment"), dict) else {}
         ),
+        "query_nlu": raw.get("query_nlu") if isinstance(raw.get("query_nlu"), dict) else {},
+        "conversation": raw.get("conversation") if isinstance(raw.get("conversation"), dict) else {},
         "portfolio_context": raw.get("portfolio_context"),
     }
 
@@ -361,6 +363,85 @@ def _detect_sector(query: str) -> str | None:
     return None
 
 
+_LEAK_SUBS = (
+    (re.compile(r"\bWilder\s+", re.I), ""),
+    (re.compile(r"\bEV/?EBITDA\b", re.I), "valuation multiple"),
+    (re.compile(r"\bNetDebt/?EBITDA\b", re.I), "leverage"),
+    (re.compile(r"\bSortino\(60d\)\b", re.I), "downside-risk score"),
+    (re.compile(r"\bP0\b"), ""),
+    (re.compile(r"\bquantitative (engine|stack)\b", re.I), "live tape"),
+)
+
+
+def _plain_reason(text: Any) -> str:
+    """Keep reasons user-facing: no method names or internal scoring labels."""
+    out = str(text or "").strip()
+    if not out:
+        return ""
+    for pat, repl in _LEAK_SUBS:
+        out = pat.sub(repl, out)
+    return re.sub(r"\s{2,}", " ", out).strip(" ;,")
+
+
+def _plain_reasons(items: list[Any] | None, limit: int = 3) -> list[str]:
+    return [line for line in (_plain_reason(item) for item in (items or [])) if line][:limit]
+
+
+def _shape_heading(query: str, profile: str) -> str:
+    try:
+        from .answer_shape import detect_answer_shape
+
+        _facet, heading = detect_answer_shape(query, profile)
+        return heading
+    except Exception:
+        return ""
+
+
+def _named_title(header_base: str, query: str, profile: str, fallback: str) -> str:
+    heading = _shape_heading(query, profile) or fallback
+    return f"{header_base} — {heading}"
+
+
+def _cagr_card(query: str) -> str | None:
+    nums = [float(n.replace(",", "")) for n in re.findall(r"\d[\d,]*\.?\d*", query or "")]
+    if len(nums) < 3:
+        return (
+            "**CAGR working**\n\n"
+            "**Your ask:** " + (query or "").strip()[:90] + "\n\n"
+            "Need start value, end value, and years.\n"
+            "Example: calculate CAGR for 100000 to 180000 in 3 years.\n"
+            "`CAGR = (end / start) ^ (1 / years) − 1`\n"
+            "_Educational math — not a return promise._"
+        )
+    start, end, years = nums[0], nums[1], nums[2]
+    if start <= 0 or years <= 0:
+        return None
+    try:
+        from indian_stock_llm.calculations import DeterministicCalculator
+
+        pct = DeterministicCalculator.cagr(start=start, end=end, years=years)
+    except Exception:
+        pct = ((end / start) ** (1.0 / years) - 1.0) * 100.0
+    return (
+        "**CAGR working**\n\n"
+        f"**Your ask:** {(query or '').strip()[:90]}\n\n"
+        f"• Start: {start:g} → End: {end:g} over {years:g} years\n"
+        f"• Formula: (end / start) ^ (1 / years) − 1\n"
+        f"• Result: **{pct:.2f}%** CAGR\n"
+        "_Educational math — not a return promise._"
+    )
+
+
+def _ask_line(query: str) -> str | None:
+    """Echo a short user ask so the first screen matches their question."""
+    text = re.sub(r"\s+", " ", (query or "").strip())
+    if not text or len(text) > 90:
+        return None
+    if text.lower().startswith("user_query:"):
+        return None
+    return f"**Your ask:** {text}"
+
+
 def compose_structured_answer(
     *,
     query: str,
@@ -368,11 +449,210 @@ def compose_structured_answer(
     market_context: dict[str, Any] | None,
     context_lines: list[str],
     deterministic: str = "",
+    profile: str | None = None,
+) -> str | None:
+    """Build a structured answer when we have enough live/domain signal."""
+    answer = _compose_structured_answer_impl(
+        query=query,
+        intent=intent,
+        market_context=market_context,
+        context_lines=context_lines,
+        deterministic=deterministic,
+        profile=profile,
+    )
+    threaded = _with_compound_followthrough(answer, query, market_context, profile)
+    return _with_conversation_voice(threaded, market_context, profile)
+
+
+def _compact_secondary_block(
+    secondary_profile: str,
+    symbol: str,
+    ctx: dict[str, Any],
+) -> str | None:
+    """Short second card when the user asked two things in one message."""
+    if not symbol or not secondary_profile:
+        return None
+    tech = ctx.get("technical") or {}
+    levels = ctx.get("trading_levels") or {}
+    price = ctx.get("current_price")
+    plan = ctx.get("trade_plan") if isinstance(ctx.get("trade_plan"), dict) else {}
+    p0 = ctx.get("p0_math") if isinstance(ctx.get("p0_math"), dict) else {}
+    if not plan and isinstance(p0.get("trade_plan"), dict):
+        plan = p0["trade_plan"]
+    if secondary_profile == "quote":
+        return (
+            f"**Also — live quote for {symbol}**\n"
+            f"• Last: ₹{_fmt(price)}"
+        )
+    if secondary_profile == "trade_plan":
+        action = plan.get("action") or "HOLD"
+        meaning = _action_meaning(action) or "Paper stance from the live tape."
+        stop = plan.get("stop") or levels.get("stop_loss")
+        target = plan.get("target_1") or levels.get("take_profit")
+        return (
+            f"**Also — paper call for {symbol}**\n"
+            f"• **{action}** — {meaning}\n"
+            f"• Stop idea {_fmt(stop)} | Target idea {_fmt(target)}"
+        )
+    if secondary_profile == "sentiment":
+        sent = ctx.get("sentiment") or {}
+        pack = ctx.get("sentiment_pack") or {}
+        label = pack.get("label") or sent.get("overall") or "mixed"
+        return f"**Also — sentiment for {symbol}**\n• Tape mood: **{label}**"
+    if secondary_profile == "news":
+        heads = list(ctx.get("news_headlines") or [])[:2]
+        if not heads:
+            return None
+        lines = [f"**Also — news on {symbol}**"]
+        for h in heads:
+            lines.append(f"• {str(h).strip()[:120]}")
+        return "\n".join(lines)
+    if secondary_profile == "technical":
+        return (
+            f"**Also — tape for {symbol}**\n"
+            f"• RSI {_fmt(tech.get('rsi'))} | "
+            f"Support {_fmt(levels.get('support'))} / "
+            f"Resistance {_fmt(levels.get('resistance'))}"
+        )
+    return None
+
+
+def _with_compound_followthrough(
+    answer: str | None,
+    query: str,
+    market_context: dict[str, Any] | None,
+    profile: str | None,
+) -> str | None:
+    if not answer:
+        return answer
+    ctx = normalize_market_context(market_context)
+    nlu = ctx.get("query_nlu") if isinstance(ctx.get("query_nlu"), dict) else {}
+    secondary = str(nlu.get("secondary_profile") or "").strip()
+    primary = str(nlu.get("primary_profile") or profile or "").strip()
+    symbol = str(ctx.get("symbol") or "").upper().strip()
+    if not nlu.get("compound") or not secondary or secondary == primary or not symbol:
+        return answer
+    extra = _compact_secondary_block(secondary, symbol, ctx)
+    if not extra:
+        return answer
+    return f"{answer.rstrip()}\n\n{extra}"
+
+
+def _with_conversation_voice(
+    answer: str | None,
+    market_context: dict[str, Any] | None,
+    profile: str | None,
+) -> str | None:
+    if not answer:
+        return answer
+    ctx = normalize_market_context(market_context)
+    convo = ctx.get("conversation") if isinstance(ctx.get("conversation"), dict) else {}
+    try:
+        from .conversation import conversational_lead
+
+        lead = conversational_lead(
+            follow_up=bool(convo.get("follow_up")),
+            symbol=str(ctx.get("symbol") or convo.get("prior_symbol") or "").upper() or None,
+            profile=profile or str(convo.get("prior_profile") or "") or None,
+            sentiment=ctx.get("user_sentiment") if isinstance(ctx.get("user_sentiment"), dict) else None,
+        )
+    except Exception:
+        lead = None
+    if not lead:
+        return answer
+    return f"{lead}\n\n{answer.lstrip()}"
+
+
+def _compose_structured_answer_impl(
+    *,
+    query: str,
+    intent: str,
+    market_context: dict[str, Any] | None,
+    context_lines: list[str],
+    deterministic: str = "",
+    profile: str | None = None,
 ) -> str | None:
     """Build a structured answer when we have enough live/domain signal."""
     q = (query or "").lower()
     ctx = hydrate_from_context_lines(normalize_market_context(market_context), context_lines)
     symbol = str(ctx.get("symbol") or "").upper().strip()
+    try:
+        from .query_contract import should_inherit_symbol
+        from .symbol_linker import link_symbols
+
+        named = bool(link_symbols(query))
+        if symbol and not should_inherit_symbol(profile or "", query, named):
+            symbol = ""
+            ctx["symbol"] = ""
+        if not symbol and (profile or intent) in {"prediction", "sentiment"}:
+            from .symbol_linker import is_index_or_market_ask
+
+            if is_index_or_market_ask(query):
+                if (profile or intent) == "prediction":
+                    return (
+                        "**Index outlook (educational)**\n\n"
+                        "**Your ask:** " + (query or "").strip()[:90] + "\n\n"
+                        "This is a market-level ask, not a single-stock forecast.\n"
+                        "• Use Nifty/Sensex structure and the open risk window — not one name on screen.\n"
+                        "• Ask a listed stock if you want a paper scenario range for that name.\n"
+                        "_Not a price guarantee — educational only._"
+                    )
+                return (
+                    "**Market mood (educational)**\n\n"
+                    "**Your ask:** " + (query or "").strip()[:90] + "\n\n"
+                    "Broad tape mood is mixed until you name a stock or index contract.\n"
+                    "Ask “Mood on RELIANCE” or “Nifty sentiment” with a listed name for a tighter read.\n"
+                    "_Sentiment framing for paper practice — not investment advice._"
+                )
+    except Exception:
+        pass
+
+    if re.search(r"\bcagr\b", q) and (profile or "") in {"calculations", "literacy", ""}:
+        card = _cagr_card(query)
+        if card:
+            return card
+
+    if (profile or "") == "fundamentals":
+        try:
+            from .symbol_linker import is_index_or_market_ask
+
+            if is_index_or_market_ask(query) and not symbol:
+                return (
+                    "**Index valuation (educational)**\n\n"
+                    f"**Your ask:** {(query or '').strip()[:90]}\n\n"
+                    "This is an index valuation ask, not a single-stock P/E dump.\n"
+                    "• Use the Nifty/Sensex multiple as a market-level cue only.\n"
+                    "• A lower index P/E is not a buy call; a richer multiple is not a sell call.\n"
+                    "Ask a listed name if you want that stock's P/E snapshot.\n"
+                    "_Educational — not a SEBI RA valuation._"
+                )
+        except Exception:
+            pass
+
+    if (profile or intent) == "session" or re.search(
+        r"\b(is (the )?market open|market hours|trading hours|when does (the )?market)\b",
+        q,
+    ):
+        try:
+            from .agent_tools import format_session_card, session_snapshot
+
+            snap = ctx.get("session") if isinstance(ctx.get("session"), dict) else session_snapshot()
+            return format_session_card(query, snap)
+        except Exception:
+            pass
+
+    if (profile or "") == "corporate_actions" or (
+        symbol
+        and re.search(r"\b(ex[- ]?date|dividend date|corporate actions?|record date)\b", q)
+    ):
+        try:
+            from .agent_tools import format_corporate_actions_card
+
+            rows = ctx.get("corporate_actions")
+            dated = rows if isinstance(rows, list) else None
+            return format_corporate_actions_card(query, symbol or "", rows=dated)
+        except Exception:
+            pass
     tech = ctx.get("technical") or {}
     fund = ctx.get("fundamental") or {}
     levels = ctx.get("trading_levels") or {}
@@ -386,7 +666,7 @@ def compose_structured_answer(
     p0 = ctx.get("p0_math") if isinstance(ctx.get("p0_math"), dict) else {}
 
     # ── Beginner market literacy (no symbol required) ───────────────
-    if intent == "market_literacy" or re.search(
+    if (profile or "") == "literacy" or intent == "market_literacy" or re.search(
         r"\b(how does the (stock|share) market work|how the (stock|share) market works|"
         r"stock market meaning|key participants|depository participant|"
         r"how (are |do )?share prices|price discovery|how to start investing|"
@@ -475,13 +755,13 @@ def compose_structured_answer(
         if "oversold" in q:
             verdict = "Yes" if rsi <= 30 else "No"
             detail = (
-                f"Wilder RSI is {_fmt(rsi)} "
+                f"RSI is {_fmt(rsi)} "
                 + ("(≤ 30 oversold threshold)." if rsi <= 30 else "(above the classic ≤ 30 oversold threshold).")
             )
         else:
             verdict = "Yes" if rsi >= 70 else "No"
             detail = (
-                f"Wilder RSI is {_fmt(rsi)} "
+                f"RSI is {_fmt(rsi)} "
                 + ("(≥ 70 overbought threshold)." if rsi >= 70 else "(below the classic ≥ 70 overbought threshold).")
             )
         parts = [
@@ -576,7 +856,20 @@ def compose_structured_answer(
             return "\n".join(parts)
 
     # ── Compare two+ names ──────────────────────────────────────────
-    if intent == "compare" or re.search(r"\bcompare\b|\bvs\b|\bversus\b|\bagainst\b", q):
+    compare_named = False
+    try:
+        from app.stock_enricher import extract_all_symbols_from_query as _cmp_syms
+
+        compare_named = len(_cmp_syms(query) or []) >= 2
+    except Exception:
+        compare_named = False
+    if (
+        intent == "compare"
+        or profile == "compare"
+        or re.search(r"\bcompare\b|\bversus\b", q)
+        or (re.search(r"\bvs\b", q) and compare_named)
+        or (re.search(r"\b(?:better\s+)?[a-z][a-z0-9.&-]{1,11}\s+or\s+[a-z][a-z0-9.&-]{1,11}\b", q) and compare_named)
+    ):
         # Only scorecard legs the user named — drop holdings/context leaks.
         mentioned: set[str] = set()
         try:
@@ -682,12 +975,35 @@ def compose_structured_answer(
                 "available RSI/trend/P/E/ROE cues — still verify guidance and valuation vs history."
             )
         else:
-            parts.append(f"Primary symbol: **{symbol or 'n/a'}** @ {_fmt(price)}")
+            named = [s for s in mentioned if s]
+            if symbol and symbol not in named:
+                named = [symbol, *named]
+            if len(named) < 2:
+                try:
+                    from .query_contract import _symbol_candidates
+
+                    for extra in _symbol_candidates(query) or []:
+                        if extra and extra not in named:
+                            named.append(extra)
+                except Exception:
+                    pass
+            other = [s for s in named if s != (symbol or "")]
+            asked = " vs ".join(named[:2]) if len(named) >= 2 else (symbol or "these names")
+            parts.append(f"You asked **{asked}**.")
+            parts.append(f"Live tape loaded for **{symbol or 'n/a'}** @ {_fmt(price)}")
             parts.append(
                 f"• RSI={_fmt(tech.get('rsi'))} | trend={tech.get('trend') or 'n/a'} | "
                 f"P/E={_fmt(fund.get('pe'))}"
             )
-            parts.append("Pass a second ticker (e.g. `Compare TCS and INFY`) for a full scorecard.")
+            if other:
+                parts.append(
+                    f"• **{other[0]}** tape is not on this card yet — "
+                    f"ask `Compare {symbol} and {other[0]}` once both quotes load."
+                )
+            else:
+                parts.append(
+                    "Name a second ticker (e.g. `Compare TCS and INFY`) for a full scorecard."
+                )
         parts.extend(
             [
                 "",
@@ -701,10 +1017,13 @@ def compose_structured_answer(
     stop_loss_ask = bool(
         symbol
         and re.search(
-            r"\b(stop[\s-]?loss|take[\s-]?profit|entry(?:\s+price)?|target(?:\s+price)?)\b",
+            r"\b(stop[\s-]?loss|take[\s-]?profit|entry(?:\s+price)?|entry zone|best entry)\b",
             q,
         )
-        and not re.search(r"\b(what is|define|definition|meaning of)\b", q)
+        and not re.search(
+            r"\b(what is|define|definition|meaning of|target (next|this|for|price|of))\b",
+            q,
+        )
     )
 
     # ── Stock-specific valuation ────────────────────────────────────
@@ -717,7 +1036,12 @@ def compose_structured_answer(
         roe = fund.get("roe")
         eps = fund.get("eps")
         parts = [
-            f"**{symbol} fundamental snapshot**",
+            _named_title(f"**{symbol}**", query, "fundamentals", "fundamental snapshot"),
+        ]
+        ask = _ask_line(query)
+        if ask:
+            parts.append(ask)
+        parts.extend([
             "",
             f"• Last price: {_fmt(price)}",
             f"• P/E: {_fmt(pe)}"
@@ -727,24 +1051,20 @@ def compose_structured_answer(
             f"• EPS: {_fmt(eps)}",
             f"• Market cap: {fund.get('market_cap') or 'n/a'}",
             f"• Dividend yield: {_safe_div_yield(fund.get('dividend_yield'))}",
-        ]
+        ])
         if fund.get("week_52"):
             parts.append(f"• 52-week context: {fund.get('week_52')}")
-        if p0.get("ok"):
-            val = p0.get("valuation_math") or {}
-            vs = p0.get("vs_nifty") or {}
+        if re.search(r"\b(cheap|expensive|costly|undervalued|overvalued)\b", q):
             parts.append(
-                f"• Earnings yield={_fmt(val.get('earnings_yield_pct'))}% | "
-                f"EV/EBITDA={_fmt(val.get('ev_ebitda'))} | NetDebt/EBITDA={_fmt(val.get('net_debt_ebitda'))}"
+                "• Cheap/expensive: one multiple is not enough — read P/E vs growth and peers."
             )
-            parts.append(
-                f"• vs Nifty: RS20={_fmt(vs.get('rs_20d'), 3)} | β60={_fmt(vs.get('beta_60d'), 3)}"
-            )
+        if re.search(r"\bbook value\b", q) and pb not in (None, "", "n/a"):
+            parts.append(f"• Book-value cue: P/B {_fmt(pb)}.")
         parts.extend(
             [
                 "",
                 "Interpret P/E vs sector peers and growth — a low P/E alone is not 'cheap'.",
-                "_Educational snapshot from live enrich + P0 math — not investment advice._",
+                "_Educational snapshot — not investment advice._",
             ]
         )
         if any(_num(x) is not None for x in (pe, pb, roe, eps, price)) or fund.get("market_cap") or p0.get("ok"):
@@ -1002,14 +1322,24 @@ def compose_structured_answer(
             )
             return "\n".join(parts)
 
+    if (profile or "") == "derivatives" and re.search(r"\bexpir", q) and not symbol:
+        return (
+            "**F&O · expiry (educational)**\n\n"
+            f"**Your ask:** {(query or '').strip()[:90]}\n\n"
+            "Nifty and Bank Nifty options follow the exchange expiry calendar "
+            "(weekly plus the monthly contract).\n"
+            "Confirm the live expiry on the NSE F&O chain before any paper size.\n"
+            "_Educational — not a live option chain / not SPAN._"
+        )
+
     # ── Derivatives / F&O educational numbers ───────────────────────
-    if intent == "derivatives" or re.search(
+    if intent == "derivatives" or (profile or "") == "derivatives" or re.search(
         r"\b(f&o|fno|futures?|options?|lot size|margin|iv|greeks|basis|straddle)\b", q
     ):
         fo = p0.get("fo") if isinstance(p0.get("fo"), dict) else {}
         if symbol or fo:
             parts = [
-                f"**{symbol or 'Index'} — F&O paper-practice snapshot**",
+                f"**{symbol or 'Index'} — {_shape_heading(query, 'derivatives') or 'F&O paper-practice snapshot'}**",
                 "",
                 f"• Spot: {_fmt(price or p0.get('price'))}",
                 f"• Indicative lot size: {fo.get('lot_size', 'n/a')} ({fo.get('lot_source', 'n/a')})",
@@ -1048,11 +1378,38 @@ def compose_structured_answer(
             return "\n".join(parts)
 
     # ── Portfolio / SIP / sizing / personal finance ─────────────────
-    if intent == "portfolio" or re.search(
+    if intent == "portfolio" or (profile or "") == "portfolio" or re.search(
         r"\b(sip|allocation|diversif|position size|kelly|personal finance|"
-        r"retirement|emergency fund|mutual fund)\b",
+        r"retirement|emergency fund|mutual fund|my watchlist|on my (watch)?list)\b",
         q,
     ):
+        pc = ctx.get("portfolio_context") if isinstance(ctx.get("portfolio_context"), dict) else {}
+        holdings_syms = [str(s).upper() for s in (pc.get("symbols") or []) if s]
+        watch = [str(s).upper() for s in (pc.get("watchlist") or []) if s]
+        qty_map = pc.get("concentrations") if isinstance(pc.get("concentrations"), dict) else {}
+        list_ask = bool(
+            re.search(
+                r"\b(my watchlist|on my (watch)?list|what('?s| is) on my list|"
+                r"my (portfolio|holdings))\b",
+                q,
+            )
+        )
+        if list_ask or holdings_syms or watch:
+            named: list[str] = []
+            for sym in holdings_syms[:16]:
+                qty = qty_map.get(sym) or qty_map.get(sym.lower())
+                named.append(f"{sym}×{int(qty)}" if qty not in (None, "") else sym)
+            list_parts = [
+                "**On your list**",
+                "",
+                f"• Holdings: {', '.join(named) if named else 'none yet'}",
+                f"• Watchlist: {', '.join(watch[:16]) if watch else 'none yet'}",
+                "",
+                "Symbols only — book last is not live P&L and we do not invent a return.",
+                "_Educational paper book — not investment advice._",
+            ]
+            if list_ask:
+                return "\n".join(list_parts)
         plan = p0.get("trade_plan") if isinstance(p0.get("trade_plan"), dict) else {}
         costs = p0.get("india_costs") if isinstance(p0.get("india_costs"), dict) else {}
         tax = p0.get("tax_drag_example") if isinstance(p0.get("tax_drag_example"), dict) else {}
@@ -1108,7 +1465,7 @@ def compose_structured_answer(
             [
                 "",
                 "Size from risk budget / goals first; never from FOMO. Educational only.",
-                "_Grounded by BYSEL quantitative engine._",
+                "_Educational only — not investment advice._",
             ]
         )
         return "\n".join(parts)
@@ -1128,9 +1485,12 @@ def compose_structured_answer(
         or stop_loss_ask
         or re.search(r"\b(should i buy|should i sell|buy or sell|trade plan|swing trade)\b", q)
     ):
-        profile = resolve_stock_response_profile(q if stop_loss_ask else query, intent)
+        profile = (profile or "").strip() or resolve_stock_response_profile(
+            q if stop_loss_ask else query, intent
+        )
         if stop_loss_ask:
             profile = "trade_plan"
+        ask_line = _ask_line(query)
 
         company = str(ctx.get("company_name") or "").strip()
         header_base = f"**{symbol}**" + (f" — {company}" if company else "")
@@ -1193,7 +1553,7 @@ def compose_structured_answer(
             conf = sentiment_pack.get("confidence") or sentiment.get("confidence")
             score_txt = f"{score:+.2f}" if isinstance(score, (int, float)) else "n/a"
             parts.append(
-                f"• Overall: **{label}** (score {score_txt}"
+                f"• Overall: **{label}** ({score_txt}"
                 + (f", confidence {conf}" if conf is not None else "")
                 + ")"
             )
@@ -1206,8 +1566,10 @@ def compose_structured_answer(
 
         # ── Focused profiles (query-aware shapes) ───────────────────
         if profile == "quote":
-            parts = [
-                f"{header_base} — live quote",
+            parts = [_named_title(header_base, query, "quote", "live quote")]
+            if ask_line:
+                parts.append(ask_line)
+            parts.extend([
                 "",
                 f"• Last: ₹{_fmt(price)}"
                 + (f" ({_fmt(pct)}%)" if _num(pct) is not None else ""),
@@ -1220,13 +1582,16 @@ def compose_structured_answer(
                 "",
                 "Ask for technicals, news, valuation, or a paper trade plan if you need more depth.",
                 "_Live quote snapshot — educational only._",
-            ]
+            ])
             return "\n".join(parts)
 
         if profile == "news":
-            parts = [f"{header_base} — news & catalysts", ""]
+            parts = [_named_title(header_base, query, "news", "news & catalysts")]
+            if ask_line:
+                parts.append(ask_line)
+            parts.append("")
             _append_news_block(parts, max_heads=6)
-            if len(parts) <= 2:
+            if len(parts) <= (3 if ask_line else 2):
                 parts.append("• No fresh headlines in the current feed — try again shortly.")
             parts.extend(
                 [
@@ -1238,10 +1603,13 @@ def compose_structured_answer(
             return "\n".join(parts)
 
         if profile == "sentiment":
-            parts = [f"{header_base} — sentiment view", ""]
+            parts = [_named_title(header_base, query, "sentiment", "sentiment view")]
+            if ask_line:
+                parts.append(ask_line)
+            parts.append("")
             _append_sentiment_block(parts)
             _append_news_block(parts, max_heads=3)
-            if len(parts) <= 2:
+            if len(parts) <= (3 if ask_line else 2):
                 parts.append("• Sentiment pack unavailable right now.")
             parts.extend(
                 [
@@ -1253,7 +1621,10 @@ def compose_structured_answer(
             return "\n".join(parts)
 
         if profile == "risks":
-            parts = [f"{header_base} — key risks now", ""]
+            parts = [_named_title(header_base, query, "risks", "key risks now")]
+            if ask_line:
+                parts.append(ask_line)
+            parts.append("")
             rsi = _num(tech.get("rsi"))
             if rsi is not None:
                 if rsi >= 70:
@@ -1282,8 +1653,10 @@ def compose_structured_answer(
             return "\n".join(parts)
 
         if profile == "technical":
-            parts = [
-                f"{header_base} — technical analysis",
+            parts = [_named_title(header_base, query, "technical", "technical analysis")]
+            if ask_line:
+                parts.append(ask_line)
+            parts.extend([
                 "",
                 "**Technical readout:**",
                 f"• Price: ₹{_fmt(price)} | Trend: {tech.get('trend') or 'n/a'}",
@@ -1297,19 +1670,12 @@ def compose_structured_answer(
                 f" | MACD hist: {_fmt(tech.get('macd_hist') or (p0.get('macd') or {}).get('histogram'))}",
                 f"• Support: {_fmt(support)} | Resistance: {_fmt(resistance)}",
                 f"• Stop idea: {_fmt(stop)} | Target idea: {_fmt(take)}",
-            ]
-            atr_s = p0.get("atr_stop") or {}
-            vs = p0.get("vs_nifty") or {}
-            if p0.get("ok"):
-                parts.append(
-                    f"• ATR stop≈{_fmt(atr_s.get('stop') or stop)} | "
-                    f"vs Nifty RS20≈{_fmt(vs.get('rs_20d'), 3)}"
-                )
+            ])
             parts.extend(
                 [
                     "",
                     "Technical structure only — ask “Should I buy …?” for a paper trade plan.",
-                    "_Grounded by BYSEL._",
+                    "_Educational only — not investment advice._",
                 ]
             )
             return "\n".join(parts)
@@ -1317,13 +1683,15 @@ def compose_structured_answer(
         if profile == "prediction":
             ps = ctx.get("prediction_signals") if isinstance(ctx.get("prediction_signals"), dict) else {}
             scenarios = (ps or {}).get("scenarios") if isinstance(ps, dict) else {}
-            parts = [
-                f"{header_base} — scenario range",
+            parts = [_named_title(header_base, query, "prediction", "scenario range")]
+            if ask_line:
+                parts.append(ask_line)
+            parts.extend([
                 "",
-                "**Not a price guarantee** — if/then bands from live tape + ATR/levels.",
+                "**Not a price guarantee** — if/then bands from live support and resistance.",
                 f"• Spot: ₹{_fmt(price)} | Trend: {tech.get('trend') or 'n/a'} | RSI {_fmt(tech.get('rsi'))}",
                 f"• Near support / resistance: {_fmt(support)} / {_fmt(resistance)}",
-            ]
+            ])
             if (ps or {}).get("advice"):
                 parts.append(f"• Investment call: **{ps.get('advice')}** (from tape + structure; not a guarantee)")
             if (ps or {}).get("event_blackout"):
@@ -1366,8 +1734,10 @@ def compose_structured_answer(
             pb = fund.get("pb")
             roe = fund.get("roe")
             eps = fund.get("eps")
-            parts = [
-                f"{header_base} — fundamental snapshot",
+            parts = [_named_title(header_base, query, "fundamentals", "fundamental snapshot")]
+            if ask_line:
+                parts.append(ask_line)
+            parts.extend([
                 "",
                 f"• Last price: {_fmt(price)}",
                 f"• P/E: {_fmt(pe)}"
@@ -1381,25 +1751,42 @@ def compose_structured_answer(
                 f"• EPS: {_fmt(eps)}",
                 f"• Market cap: {fund.get('market_cap') or 'n/a'}",
                 f"• Dividend yield: {_safe_div_yield(fund.get('dividend_yield'))}",
-            ]
+            ])
             if fund.get("week_52"):
                 parts.append(f"• 52-week context: {fund.get('week_52')}")
-            if p0.get("ok"):
-                val = p0.get("valuation_math") or {}
-                vs = p0.get("vs_nifty") or {}
-                parts.append(
-                    f"• Earnings yield={_fmt(val.get('earnings_yield_pct'))}% | "
-                    f"EV/EBITDA={_fmt(val.get('ev_ebitda'))}"
-                )
-                parts.append(
-                    f"• vs Nifty: RS20={_fmt(vs.get('rs_20d'), 3)} | "
-                    f"β60={_fmt(vs.get('beta_60d'), 3)}"
-                )
             parts.extend(
                 [
                     "",
                     "Interpret P/E vs peers and growth — a low P/E alone is not cheap.",
                     "_Educational snapshot — not investment advice._",
+                ]
+            )
+            return "\n".join(parts)
+
+        if profile == "stock_analysis":
+            how = (
+                f"**How it's doing:** Last ₹{_fmt(price)}"
+                + (f" ({_fmt(pct)}%)" if _num(pct) is not None else "")
+                + f" · trend {tech.get('trend') or 'n/a'} · RSI {_fmt(tech.get('rsi'))}"
+            )
+            parts = [_named_title(header_base, query, "stock_analysis", "snapshot")]
+            if ask_line:
+                parts.append(ask_line)
+            parts.extend(
+                [
+                    "",
+                    how,
+                    f"• Support / Resistance: {_fmt(support)} / {_fmt(resistance)}",
+                ]
+            )
+            if fund.get("pe") not in (None, "", "n/a"):
+                parts.append(f"• Valuation cue: P/E {_fmt(fund.get('pe'))}")
+            _append_news_block(parts, max_heads=2)
+            parts.extend(
+                [
+                    "",
+                    f"Ask “Should I buy {symbol}?” if you want a paper entry, stop, and targets.",
+                    "_Educational snapshot — not a buy/sell call._",
                 ]
             )
             return "\n".join(parts)
@@ -1414,9 +1801,9 @@ def compose_structured_answer(
             )
             or intent in {"overbought_check", "market_calculations"}
         )
-        include_trade_plan = profile in {"trade_plan", "stock_analysis", "calculations"}
-        include_sentiment = profile in {"stock_analysis", "trade_plan", "calculations"}
-        include_debate = profile in {"trade_plan", "stock_analysis"}
+        include_trade_plan = profile in {"trade_plan", "calculations"}
+        include_sentiment = profile in {"stock_analysis", "trade_plan"}
+        include_debate = profile == "trade_plan"
 
         stance, rationale, score = _stance_from_tech(tech, fund, weekly=weekly)
         if plan.get("action"):
@@ -1430,9 +1817,10 @@ def compose_structured_answer(
                 "WAIT": "WAIT — insufficient signal quality",
             }.get(action, stance)
             if plan.get("reasons_for"):
-                rationale = "; ".join(plan["reasons_for"][:3])
+                rationale = "; ".join(_plain_reasons(plan["reasons_for"], 3))
             elif plan.get("reason"):
-                rationale = str(plan["reason"])
+                rationale = _plain_reason(plan["reason"])
+        rationale = _plain_reason(rationale)
 
         rsi = _num(tech.get("rsi"))
         if (
@@ -1445,17 +1833,23 @@ def compose_structured_answer(
             stance = "SELL bias for short-term / avoid chasing; wait for cool-off toward support"
             rationale = f"{rationale}; short-horizon ask + overbought RSI"
 
-        title_suffix = {
-            "trade_plan": " — paper trade plan",
-            "calculations": " — quantitative stack",
-            "stock_analysis": " — paper-practice view",
-        }.get(profile, " — paper-practice view")
-        parts = [
-            header_base + title_suffix,
+        fallback_heading = {
+            "trade_plan": "paper trade plan",
+            "calculations": "live checks",
+            "stock_analysis": "snapshot",
+        }.get(profile, "snapshot")
+        parts = [_named_title(header_base, query, profile, fallback_heading)]
+        if ask_line:
+            parts.append(ask_line)
+        parts.extend([
             "",
             f"**Direct answer:** {stance}",
             f"**Why:** {rationale}",
-        ]
+        ])
+        if profile == "stock_analysis":
+            parts.append(
+                f"Ask “Should I buy {symbol}?” if you want a paper entry, stop, and targets."
+            )
 
         if include_trade_plan and plan.get("action"):
             ez = plan.get("entry_zone") or []
@@ -1465,8 +1859,7 @@ def compose_structured_answer(
                 [
                     "",
                     f"**Action:** {plan.get('action')} "
-                    f"(score {plan.get('score')}, confidence {_fmt(plan.get('confidence'), 2)}, "
-                    f"{plan.get('horizon') or 'swing'})",
+                    f"({plan.get('horizon') or 'swing'})",
                 ]
             )
             if meaning:
@@ -1485,6 +1878,17 @@ def compose_structured_answer(
             if plan.get("invalidation"):
                 parts.append(f"• Invalidation: {plan.get('invalidation')}")
             parts.extend(["", _ACTION_LEGEND_LINE])
+
+        if profile == "trade_plan" and symbol:
+            try:
+                from .agent_tools import paper_order_from_plan
+
+                ticket_plan = plan if plan.get("action") else (ctx.get("trade_plan") or {})
+                ticket = paper_order_from_plan(symbol, ticket_plan, stop=stop)
+                if ticket and ticket.get("line"):
+                    parts.extend(["", "**Paper ticket:**", ticket["line"]])
+            except Exception:
+                pass
 
         conv_summary = str(ctx.get("conversation_summary") or "").strip()
         user_tone = ctx.get("user_sentiment") if isinstance(ctx.get("user_sentiment"), dict) else {}
@@ -1559,7 +1963,7 @@ def compose_structured_answer(
 
         if p0.get("ok") and want_full_math:
             parts.append("")
-            parts.append("**Quantitative stack (computed):**")
+            parts.append("**Requested checks:**")
             bb = p0.get("bollinger") or {}
             atr_s = p0.get("atr_stop") or {}
             vs = p0.get("vs_nifty") or {}
@@ -1569,7 +1973,7 @@ def compose_structured_answer(
             fib = p0.get("fibonacci") or {}
             rs = p0.get("risk_stats") or {}
             parts.append(
-                f"• Wilder RSI(14)={_fmt(p0.get('wilder_rsi_14'))} | {p0.get('rsi_divergence') or 'n/a'}"
+                f"• RSI={_fmt(p0.get('wilder_rsi_14'))} | {p0.get('rsi_divergence') or 'n/a'}"
             )
             parts.append(
                 f"• Bollinger %B={_fmt(bb.get('pct_b'), 3)} | bandwidth={_fmt(bb.get('bandwidth'), 4)} "
@@ -1597,24 +2001,19 @@ def compose_structured_answer(
             dq = p0.get("data_quality") or {}
             if dq.get("degraded"):
                 parts.append("• Data quality: partial feeds — treat confidence as capped")
-        elif p0.get("ok") and include_trade_plan:
+        elif p0.get("ok") and include_trade_plan and want_full_math:
             atr_s = p0.get("atr_stop") or {}
-            vs = p0.get("vs_nifty") or {}
             parts.append("")
-            parts.append("**Quick math:**")
+            parts.append("**Practice levels:**")
             parts.append(
-                f"• ATR stop≈{_fmt(atr_s.get('stop') or stop)} | "
-                f"vs Nifty RS20≈{_fmt(vs.get('rs_20d'), 3)} | "
-                f"Wilder RSI≈{_fmt(p0.get('wilder_rsi_14') or tech.get('rsi'))}"
-            )
-            parts.append(
-                f'Tip: ask "full math for {symbol}" to see the complete indicator stack.'
+                f"• Stop idea {_fmt(atr_s.get('stop') or stop)} | "
+                f"RSI {_fmt(p0.get('wilder_rsi_14') or tech.get('rsi'))}"
             )
 
         if include_debate:
             parts.append("")
             parts.append("**For (setup):**")
-            for item in (plan.get("reasons_for") or [])[:3]:
+            for item in _plain_reasons(plan.get("reasons_for"), 3):
                 parts.append(f"• {item}")
             if not plan.get("reasons_for"):
                 if rsi is not None and rsi <= 30:
@@ -1626,7 +2025,7 @@ def compose_structured_answer(
 
             parts.append("")
             parts.append("**Against:**")
-            for item in (plan.get("reasons_against") or [])[:3]:
+            for item in _plain_reasons(plan.get("reasons_against"), 3):
                 parts.append(f"• {item}")
             if not plan.get("reasons_against"):
                 parts.append(
@@ -1642,7 +2041,7 @@ def compose_structured_answer(
         parts.extend(
             [
                 "",
-                "Answer shaped for your ask from live quotes + deterministic math — "
+                "Educational paper view from live quotes — "
                 "not investment advice / not a price guarantee.",
                 "_Grounded by BYSEL._",
             ]
