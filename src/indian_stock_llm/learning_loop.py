@@ -36,6 +36,8 @@ class ContinualLearningManager:
         if self.feedback_log_path is not None:
             self.feedback_log_path.parent.mkdir(parents=True, exist_ok=True)
             self.feedback_log_path.touch(exist_ok=True)
+        self.signals = FeedbackSignalStore()
+        self.signals.load_from_log(self.feedback_log_path)
         if self.feedback_log_path is not None and async_logging:
             self._queue = Queue(maxsize=1_000)
             self._stop_event = Event()
@@ -103,6 +105,10 @@ class ContinualLearningManager:
         ts = datetime.now(timezone.utc).isoformat()
         payload = {"ts": ts, "intent": intent, "query_hash": self.anonymize_query(query)}
         self._write_line(json.dumps(payload, ensure_ascii=False) + "\n")
+
+    def record_thumbs(self, query: str, intent: str, helpful: bool) -> None:
+        fields = _learning_fields(query)
+        self.signals.record(str(fields["key"]), intent, helpful)
 
     def record_interaction(
         self,
@@ -175,6 +181,85 @@ _INTENT_TOP_TAGS: dict[str, list[str]] = {
     "stock_analysis": ["analysis", "technical"],
     "portfolio": ["portfolio", "risk"],
 }
+
+
+class FeedbackSignalStore:
+    """In-process thumbs scores used to rerank the ISM retrieval chain.
+
+    Thumbs-up boosts notes that match the learning key. Thumbs-down sinks
+    auto-learned notes for that key so the same unhelpful snippet is not
+    retrieved again. This is retrieval learning — not LoRA / fine-tuning.
+    """
+
+    def __init__(self) -> None:
+        self.up: dict[str, int] = {}
+        self.down: dict[str, int] = {}
+
+    @staticmethod
+    def _norm_key(query_key: str) -> str:
+        fields = _learning_fields(query_key)
+        return str(fields.get("key") or query_key).strip().lower().strip(" ?!.,;:")
+
+    def record(self, query_key: str, intent: str, helpful: bool) -> None:
+        key = self._norm_key(query_key)
+        if not key:
+            return
+        bucket = self.up if helpful else self.down
+        bucket[key] = bucket.get(key, 0) + 1
+
+    def net(self, query_key: str) -> int:
+        key = self._norm_key(query_key)
+        return int(self.up.get(key, 0)) - (2 * int(self.down.get(key, 0)))
+
+    def load_from_log(self, feedback_log_path: Path | None) -> None:
+        if feedback_log_path is None or not feedback_log_path.exists():
+            return
+        with feedback_log_path.open("r", encoding="utf-8") as fp:
+            for line in fp:
+                text = line.strip()
+                if not text.startswith("{"):
+                    continue
+                try:
+                    payload = json.loads(text)
+                except json.JSONDecodeError:
+                    continue
+                if str(payload.get("kind") or "") != "thumbs_v1":
+                    continue
+                raw = str(payload.get("query_key") or payload.get("query") or "").strip()
+                if not raw:
+                    continue
+                fields = _learning_fields(raw)
+                self.record(str(fields["key"]), str(payload.get("intent") or ""), bool(payload.get("helpful")))
+
+    def rerank_items(self, query: str, items: list) -> list:
+        if not items:
+            return items
+        qkey = self._norm_key(query)
+        if not qkey:
+            return items
+        score = self.net(qkey)
+        if score == 0:
+            return items
+        needle = qkey[:48]
+
+        def _blob(item: object) -> str:
+            return f"{getattr(item, 'title', '')} {getattr(item, 'content', '')}".lower()
+
+        def _is_learned(item: object) -> bool:
+            return str(getattr(item, "source", "")).startswith("learned_")
+
+        def _matches(item: object) -> bool:
+            return bool(needle) and needle in _blob(item)
+
+        if score < 0:
+            kept = [item for item in items if not (_is_learned(item) and _matches(item))]
+            return kept or items
+
+        return sorted(
+            items,
+            key=lambda item: (_matches(item), _is_learned(item)),
+            reverse=True,
+        )
 
 
 class DailyFeedbackAnalyzer:
@@ -361,6 +446,7 @@ class FeedbackLearningPipeline:
 
         query_counts: dict[tuple[str, str], int] = {}
         telugu_keys: set[str] = set()
+        vetoed: set[tuple[str, str]] = set()
         with feedback_log_path.open("r", encoding="utf-8") as fp:
             for line in fp:
                 text = line.strip()
@@ -379,6 +465,13 @@ class FeedbackLearningPipeline:
                         # Skip anonymized hash-only rows.
                         if payload.get("query_hash") and not payload.get("query") and not payload.get("query_key"):
                             continue
+                    if kind == "thumbs_v1" and payload.get("helpful") is False:
+                        raw_down = str(payload.get("query_key") or payload.get("query") or "").strip()
+                        if raw_down:
+                            down_fields = _learning_fields(raw_down)
+                            down_intent = str(payload.get("intent") or "general_query").strip() or "general_query"
+                            vetoed.add((str(down_fields["key"]), down_intent))
+                        continue
                     intent = str(payload.get("intent") or "general_query").strip() or "general_query"
                     raw_query = str(payload.get("query_key") or payload.get("query") or "").strip()
                     language = str(payload.get("language") or "en")
@@ -392,9 +485,13 @@ class FeedbackLearningPipeline:
                     continue
                 fields = _learning_fields(raw_query)
                 key = (str(fields["key"]), intent)
+                if key in vetoed:
+                    continue
                 query_counts[key] = query_counts.get(key, 0) + 1
                 if fields["is_telugu"] or language in {"te", "te-en"}:
                     telugu_keys.add(str(fields["key"]))
+        for veto_key in vetoed:
+            query_counts.pop(veto_key, None)
 
         existing = _load_learned_items(learned_knowledge_path)
         existing_ids = {str(row["id"]) for row in existing}

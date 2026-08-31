@@ -790,6 +790,12 @@ class StockMarketAssistant:
             metadata_filters=None,
             intent=intent,
         )
+        try:
+            signals = getattr(self.learning_manager, "signals", None)
+            if signals is not None:
+                context_items = signals.rerank_items(search_query, context_items)
+        except Exception:
+            pass
         # Drop polluted learned/promoted notes that leak unrelated prior answers.
         context_items = [
             item
