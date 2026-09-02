@@ -34,6 +34,18 @@ _SKIP_TICKER_WORDS = {
 
 _EN_WORD_RE = re.compile(r"\b[A-Za-z]{3,}\b")
 _TELUGU_RE = re.compile(r"[\u0C00-\u0C7F]")
+_SKIP_NMT_RE = re.compile(
+    r"disclaimer|informational only|educational /|validate with live|"
+    r"not a price guarantee|_?BYSEL\.?$|This response is informational|"
+    r"Action legend|Risk frame \(3-5-7\)|suggested qty|"
+    r"Entry zone:|Risk/reward:|Invalidation:|Stop idea:|Target idea:|"
+    r"BUY = |ACCUMULATE = |"
+    r"^\s*[•\-]\s*\((?:neutral|positive|negative)\)",
+    flags=re.I,
+)
+_GARBAGE_RE = re.compile(r"[:#]{6,}|(?:#\s){5,}|:{8,}")
+_MAX_NMT_LINES = 10
+_CHUNK_SIZE = 4
 
 
 def indic_trans_url() -> str:
@@ -54,11 +66,29 @@ def indic_trans_enabled() -> bool:
 
 
 def _timeout_s() -> float:
-    raw = os.getenv("INDIC_TRANS_TIMEOUT_S") or "8"
+    raw = os.getenv("INDIC_TRANS_TIMEOUT_S") or "90"
     try:
         return max(1.0, float(raw))
     except ValueError:
-        return 8.0
+        return 90.0
+
+
+def _auth_headers(url: str) -> dict[str, str]:
+    """Identity token when the worker is a private Cloud Run service."""
+    if (os.getenv("INDIC_TRANS_AUTH") or "").strip().lower() in {"none", "off", "0"}:
+        return {}
+    if "run.app" not in (url or ""):
+        return {}
+    try:
+        import google.auth.transport.requests
+        import google.oauth2.id_token
+
+        request = google.auth.transport.requests.Request()
+        token = google.oauth2.id_token.fetch_id_token(request, url)
+        return {"Authorization": f"Bearer {token}"}
+    except Exception as exc:
+        logger.debug("IndicTrans2 identity token missed: %s", exc)
+        return {}
 
 
 def shield_protected_tokens(text: str) -> tuple[str, list[str]]:
@@ -94,12 +124,29 @@ def unshield_protected_tokens(text: str, tokens: list[str]) -> str:
 
 def needs_nmt(line: str) -> bool:
     """True when a line still has enough English prose to send to IndicTrans2."""
-    if not (line or "").strip():
+    raw = (line or "").strip()
+    if not raw:
         return False
-    english = _EN_WORD_RE.findall(line)
-    if _TELUGU_RE.search(line):
-        return len(english) >= 8
-    return len(english) >= 4
+    if raw.startswith("`") and raw.endswith("`"):
+        return False
+    if _SKIP_NMT_RE.search(raw):
+        return False
+    english = _EN_WORD_RE.findall(raw)
+    if _TELUGU_RE.search(raw):
+        return len(english) >= 5
+    return len(english) >= 3
+
+
+def usable_telugu_line(original: str, translated: str) -> bool:
+    """Drop NLLB garbage (colon/hash runs) and empty Telugu."""
+    raw = (translated or "").strip()
+    if not raw or raw == (original or "").strip():
+        return False
+    if _GARBAGE_RE.search(raw):
+        return False
+    if raw.count("#") > 6:
+        return False
+    return bool(_TELUGU_RE.search(raw))
 
 
 def translate_english_batch(texts: list[str]) -> list[str] | None:
@@ -114,23 +161,37 @@ def translate_english_batch(texts: list[str]) -> list[str] | None:
     except Exception:
         logger.debug("IndicTrans2 skipped: httpx missing")
         return None
+    headers = _auth_headers(url)
+    out: list[str] = []
     try:
         with httpx.Client(timeout=_timeout_s()) as client:
-            response = client.post(
-                f"{url}/translate",
-                json={
-                    "texts": texts,
-                    "src_lang": _SRC_LANG,
-                    "tgt_lang": _TGT_LANG,
-                },
-            )
-        response.raise_for_status()
-        payload = response.json()
-        translations = payload.get("translations")
-        if not isinstance(translations, list) or len(translations) != len(texts):
-            logger.warning("IndicTrans2 worker returned a bad payload")
-            return None
-        return [str(item or "") for item in translations]
+            for start in range(0, len(texts), _CHUNK_SIZE):
+                chunk = texts[start : start + _CHUNK_SIZE]
+                response = None
+                for attempt in range(2):
+                    response = client.post(
+                        f"{url}/translate",
+                        json={
+                            "texts": chunk,
+                            "src_lang": _SRC_LANG,
+                            "tgt_lang": _TGT_LANG,
+                        },
+                        headers=headers,
+                    )
+                    if response.status_code != 429:
+                        break
+                    if attempt == 0:
+                        import time
+
+                        time.sleep(2.0)
+                response.raise_for_status()
+                payload = response.json()
+                translations = payload.get("translations")
+                if not isinstance(translations, list) or len(translations) != len(chunk):
+                    logger.warning("IndicTrans2 worker returned a bad payload")
+                    return None
+                out.extend(str(item or "") for item in translations)
+        return out
     except Exception as exc:
         logger.warning("IndicTrans2 worker missed: %s", exc)
         return None
@@ -145,17 +206,19 @@ def translate_leftover_english(text: str) -> str:
     for index, line in enumerate(lines):
         if not needs_nmt(line):
             continue
-        shielded, tokens = shield_protected_tokens(line)
-        jobs.append((index, shielded, tokens))
+        # Do not shield tickers/₹/RSI. NLLB mangles [[T0]] into :::: / # # #.
+        jobs.append((index, line, []))
+        if len(jobs) >= _MAX_NMT_LINES:
+            break
     if not jobs:
         return text
-    translated = translate_english_batch([shielded for _, shielded, _ in jobs])
+    translated = translate_english_batch([src for _, src, _ in jobs])
     if not translated:
         return text
     out = list(lines)
-    for (index, _, tokens), te_line in zip(jobs, translated):
-        cleaned = unshield_protected_tokens((te_line or "").strip(), tokens)
-        if cleaned:
+    for (index, original, _), te_line in zip(jobs, translated):
+        cleaned = (te_line or "").strip()
+        if usable_telugu_line(original, cleaned):
             out[index] = cleaned
     return "\n".join(out)
 

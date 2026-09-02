@@ -36,6 +36,12 @@ _HEADER_TE: tuple[tuple[str, str], ...] = (
     (r"\*\*Quantitative stack \(computed\):\*\*", "**\u0c15\u0c4d\u0c35\u0c3e\u0c02\u0c1f\u0c4d \u0c38\u0c4d\u0c1f\u0c3e\u0c15\u0c4d:**"),
     (r"\*\*Action legend \(paper practice\):\*\*",
      "**\u0c1a\u0c30\u0c4d\u0c2f \u0c32\u0c46\u0c1c\u0c46\u0c02\u0c21\u0c4d (\u0c2a\u0c47\u0c2a\u0c30\u0c4d \u0c2a\u0c4d\u0c30\u0c3e\u0c15\u0c4d\u0c1f\u0c40\u0c38\u0c4d):**"),
+    (r"\*\*Technical readout:\*\*", "**\u0c1f\u0c46\u0c15\u0c4d\u0c28\u0c3f\u0c15\u0c32\u0c4d \u0c35\u0c3f\u0c35\u0c30\u0c02:**"),
+    (r"\*\*Paper ticket:\*\*", "**\u0c2a\u0c47\u0c2a\u0c30\u0c4d \u0c1f\u0c3f\u0c15\u0c46\u0c1f\u0c4d:**"),
+    (r"\*\*Requested checks:\*\*", "**\u0c05\u0c21\u0c3f\u0c17\u0c3f\u0c28 \u0c1a\u0c46\u0c15\u0c4d\u0c32\u0c41:**"),
+    (r"\*\*Practice levels:\*\*", "**\u0c2a\u0c4d\u0c30\u0c3e\u0c15\u0c4d\u0c1f\u0c40\u0c38\u0c4d \u0c38\u0c4d\u0c25\u0c3e\u0c2f\u0c3f\u0c32\u0c41:**"),
+    (r"\*\*Bias \(paper\):\*\*", "**\u0c2c\u0c2f\u0c3e\u0c38\u0c4d (\u0c2a\u0c47\u0c2a\u0c30\u0c4d):**"),
+    (r"\*\*How it's doing:\*\*", "**\u0c07\u0c2a\u0c4d\u0c2a\u0c41\u0c21\u0c41 \u0c0e\u0c32\u0c3e \u0c09\u0c02\u0c26\u0c3f:**"),
 )
 
 _BODY_TE: tuple[tuple[str, str], ...] = (
@@ -74,10 +80,12 @@ _BODY_TE: tuple[tuple[str, str], ...] = (
         "WAIT \u2014 insufficient signal quality",
         "\u0c35\u0c47\u0c1a\u0c3f \u0c09\u0c02\u0c21\u0c02\u0c21\u0c3f (WAIT) \u2014 signal \u0c38\u0c30\u0c3f\u0c2a\u0c4b\u0c32\u0c47\u0c26\u0c41",
     ),
+    (" \u2014 paper buy plan", " \u2014 \u0c2a\u0c47\u0c2a\u0c30\u0c4d \u0c15\u0c4a\u0c28\u0c41\u0c17\u0c4b\u0c32 \u0c2a\u0c4d\u0c32\u0c3e\u0c28\u0c4d"),
     (" \u2014 paper trade plan", " \u2014 \u0c2a\u0c47\u0c2a\u0c30\u0c4d \u0c1f\u0c4d\u0c30\u0c47\u0c21\u0c4d \u0c2a\u0c4d\u0c32\u0c3e\u0c28\u0c4d"),
+    (" \u2014 snapshot", " \u2014 \u0c38\u0c28\u0c4d\u0c28\u0c3f\u0c35\u0c47\u0c36\u0c02"),
+    (" \u2014 live quote", " \u2014 \u0c32\u0c48\u0c35\u0c4d \u0c15\u0c4b\u0c1f\u0c4d"),
     (" \u2014 paper-practice view", " \u2014 \u0c2a\u0c47\u0c2a\u0c30\u0c4d \u0c2a\u0c4d\u0c30\u0c3e\u0c15\u0c4d\u0c1f\u0c40\u0c38\u0c4d"),
     (" \u2014 quantitative stack", " \u2014 \u0c15\u0c4d\u0c35\u0c3e\u0c02\u0c1f\u0c4d \u0c38\u0c4d\u0c1f\u0c3e\u0c15\u0c4d"),
-    (" \u2014 live quote", " \u2014 \u0c32\u0c48\u0c35\u0c4d \u0c15\u0c4b\u0c1f\u0c4d"),
     (" \u2014 momentum check", " \u2014 momentum check"),
     (" \u2014 overbought check", " \u2014 overbought check"),
     (" \u2014 indicator snapshot", " \u2014 indicator snapshot"),
@@ -122,6 +130,21 @@ _BODY_TE: tuple[tuple[str, str], ...] = (
         "Single-indicator calls fail in strong trends; confirm with volume/news.",
         "\u0c2c\u0c32\u0c2e\u0c48\u0c28 trend\u0c32\u0c4b \u0c12\u0c15\u0c4d\u0c15 indicator \u0c1a\u0c3e\u0c32\u0c26\u0c41; volume/news\u0c24\u0c4b confirm \u0c1a\u0c47\u0c2f\u0c02\u0c21\u0c3f.",
     ),
+    (
+        "No clear edge \u2014 stay flat or keep what you have (paper)",
+        "\u0c38\u0c4d\u0c2a\u0c37\u0c4d\u0c1f\u0c2e\u0c48\u0c28 edge \u0c32\u0c47\u0c26\u0c41 \u2014 "
+        "\u0c15\u0c4a\u0c24\u0c4d\u0c24 \u0c15\u0c4a\u0c28\u0c41\u0c17\u0c4b\u0c32\u0c41 \u0c35\u0c26\u0c4d\u0c26\u0c41 (\u0c2a\u0c47\u0c2a\u0c30\u0c4d)",
+    ),
+    (
+        "Ask for technicals, news, valuation, or a paper trade plan if you need more depth.",
+        "\u0c07\u0c02\u0c15\u0c3e technicals, \u0c35\u0c3e\u0c30\u0c4d\u0c24\u0c32\u0c41, valuation \u0c32\u0c47\u0c26\u0c3e "
+        "paper trade plan \u0c15\u0c3e\u0c35\u0c3e\u0c32\u0c02\u0c1f\u0c47 \u0c05\u0c21\u0c17\u0c02\u0c21\u0c3f.",
+    ),
+    (
+        "if you want a paper entry, stop, and targets.",
+        "paper entry / stop / targets \u0c15\u0c3e\u0c35\u0c3e\u0c32\u0c02\u0c1f\u0c47 \u0c05\u0c21\u0c17\u0c02\u0c21\u0c3f.",
+    ),
+    ("**How it's doing:**", "**\u0c07\u0c2a\u0c4d\u0c2a\u0c41\u0c21\u0c41 \u0c0e\u0c32\u0c3e \u0c09\u0c02\u0c26\u0c3f:**"),
     ("screen (educational)", "screen (\u0c35\u0c3f\u0c26\u0c4d\u0c2f\u0c3e)"),
     ("Primary symbol:", "\u0c2a\u0c4d\u0c30\u0c27\u0c3e\u0c28 symbol:"),
     ("\u2022 Last price:", "\u2022 \u0c1a\u0c3f\u0c35\u0c30\u0c3f \u0c27\u0c30:"),
@@ -334,9 +357,22 @@ def _already_localized(answer: str) -> bool:
     return _LOCALIZED_MARK in (answer or "")[:180]
 
 
+_STANCE_LINE_RE = (
+    r"\*\*(?:Action|Direct answer|\u0c1a\u0c30\u0c4d\u0c2f|\u0c28\u0c47\u0c30\u0c41\u0c17\u0c3e \u0c38\u0c2e\u0c3e\u0c27\u0c3e\u0c28\u0c02):\*\*"
+    r".{0,80}?\b(ACCUMULATE|BUY|SELL|HOLD|WAIT|TRIM|AVOID)\b"
+)
+_FALSE_BUY_RE = re.compile(
+    r"(?i)paper buy plan|should i buy|buy/sell|buy plan|buy \?",
+)
+
+
 def _stance_from_answer(answer: str) -> str | None:
-    head = (answer or "")[:500]
-    match = re.search(r"\b(ACCUMULATE|BUY|SELL|HOLD|WAIT|TRIM|AVOID)\b", head, flags=re.I)
+    text = answer or ""
+    match = re.search(_STANCE_LINE_RE, text, flags=re.I | re.S)
+    if match:
+        return match.group(1).upper()
+    head = _FALSE_BUY_RE.sub(" ", text[:700])
+    match = re.search(r"\b(ACCUMULATE|SELL|HOLD|WAIT|TRIM|AVOID|BUY)\b", head, flags=re.I)
     if not match:
         return None
     return match.group(1).upper()
@@ -373,8 +409,16 @@ def _extract_numeric_lines(answer: str) -> str:
     return "\n".join(kept)
 
 
+_DROP_ASK_RE = re.compile(r"(?im)^\*\*(?:Your ask|\u0c2e\u0c40 \u0c2a\u0c4d\u0c30\u0c36\u0c4d\u0c28):\*\*.*\n?")
+
+
+def _drop_internal_ask(answer: str) -> str:
+    """Do not show the English rewrite ('RELIANCE should I buy ?') to Telugu users."""
+    return _DROP_ASK_RE.sub("", answer or "")
+
+
 def _translate_structured(answer: str) -> str:
-    text = (answer or "").replace("\u2013", "\u2014").replace(" - ", " \u2014 ")
+    text = _drop_internal_ask(answer or "").replace("\u2013", "\u2014").replace(" - ", " \u2014 ")
     for pat, repl in _HEADER_TE:
         text = re.sub(pat, repl, text)
     for src, dest in _BODY_TE + _ASCII_DASH_BODY:
