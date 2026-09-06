@@ -1099,13 +1099,49 @@ def resolve_query_contract(
     needs_symbol = profile in _PROFILES_NEEDING_SYMBOL
     index_entity = bool(
         re.search(
-            r"\b(nifty|sensex|bank\s*nifty|india\s*vix)\b",
+            r"\b(nifty|sensex|bank\s*nifty|india\s*vix)\b|"
+            r"[\u0c28][\u0c3f][\u0c2b][\u0c4d][\u0c1f][\u0c40]|"
+            r"[\u0c38][\u0c46][\u0c28][\u0c4d][\u0c38][\u0c46][\u0c15][\u0c4d][\u0c38][\u0c4d]",
             resolved or cleaned,
             flags=re.IGNORECASE,
         )
     )
+    low = f"{resolved} {cleaned}".lower()
+    index_status = index_entity and bool(
+        re.search(
+            r"\b(how is|how much|ela undi|entha|dhara|status|trading at)\b",
+            low,
+        )
+    ) and not re.search(
+        r"\b(what is|what are|explain|define|pe ratio|valuation|outlook)\b",
+        low,
+    )
+    if index_status and profile in {
+        "stock_analysis",
+        "fundamentals",
+        "literacy",
+        "quote",
+        "sentiment",
+        "technical",
+        "news",
+    }:
+        profile = "quote"
+        needs_symbol = True
+    if (
+        needs_symbol
+        and not symbol
+        and index_entity
+        and profile in {"quote", "stock_analysis", "sentiment", "technical", "news"}
+    ):
+        if re.search(r"\bbank\s*nifty\b", low):
+            symbol = "BANKNIFTY"
+        elif "sensex" in low or "\u0c38\u0c46\u0c28\u0c4d\u0c38\u0c46\u0c15\u0c4d\u0c38\u0c4d" in (resolved or cleaned):
+            symbol = "SENSEX"
+        else:
+            symbol = "NIFTY50"
     if needs_symbol and not symbol and not ambiguous and not (
-        profile in {"fundamentals", "quote", "prediction"} and index_entity
+        profile in {"fundamentals", "quote", "prediction", "stock_analysis", "sentiment", "technical", "news"}
+        and index_entity
     ):
         missing.append("symbol")
 

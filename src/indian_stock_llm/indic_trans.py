@@ -34,16 +34,21 @@ _SKIP_TICKER_WORDS = {
 
 _EN_WORD_RE = re.compile(r"\b[A-Za-z]{3,}\b")
 _TELUGU_RE = re.compile(r"[\u0C00-\u0C7F]")
+_INDICATOR_LINE_RE = re.compile(
+    r"\b(?:RSI|MACD|P/?E|EPS|SMA|EMA|CAGR)\b",
+    flags=re.I,
+)
 _SKIP_NMT_RE = re.compile(
     r"disclaimer|informational only|educational /|validate with live|"
     r"not a price guarantee|_?BYSEL\.?$|This response is informational|"
     r"Action legend|Risk frame \(3-5-7\)|suggested qty|"
     r"Entry zone:|Risk/reward:|Invalidation:|Stop idea:|Target idea:|"
+    r"^\s*•?\s*Stop:|Target \d:|Open/High/Low|"
     r"BUY = |ACCUMULATE = |"
     r"^\s*[•\-]\s*\((?:neutral|positive|negative)\)",
     flags=re.I,
 )
-_GARBAGE_RE = re.compile(r"[:#]{6,}|(?:#\s){5,}|:{8,}")
+_GARBAGE_RE = re.compile(r"[:#]{6,}|(?:#\s){5,}|:{8,}|\*\s+\*")
 _MAX_NMT_LINES = 10
 _CHUNK_SIZE = 4
 
@@ -131,9 +136,18 @@ def needs_nmt(line: str) -> bool:
         return False
     if _SKIP_NMT_RE.search(raw):
         return False
-    english = _EN_WORD_RE.findall(raw)
+    # Markdown titles and scorecard rows: NMT turns **WIPRO** into * * and
+    # RELIANCE into విశ్వసనీయత.
+    if raw.startswith("**") or raw.startswith("|") or raw.count("|") >= 3:
+        return False
+    # Phrase-table lines already have Telugu. Sending the whole line to NMT
+    # overwrites **కారణం** / RSI with garbled script.
     if _TELUGU_RE.search(raw):
-        return len(english) >= 5
+        return False
+    # Short RSI / MACD / HOLD readouts must stay Latin. NMT turns RSI into ఆర్ఎస్ఐ.
+    if _INDICATOR_LINE_RE.search(raw) and len(raw) <= 120:
+        return False
+    english = _EN_WORD_RE.findall(raw)
     return len(english) >= 3
 
 
@@ -146,6 +160,11 @@ def usable_telugu_line(original: str, translated: str) -> bool:
         return False
     if raw.count("#") > 6:
         return False
+    for ticker in _TICKER_RE.findall(original or ""):
+        if ticker in _SKIP_TICKER_WORDS:
+            continue
+        if ticker not in raw:
+            return False
     return bool(_TELUGU_RE.search(raw))
 
 

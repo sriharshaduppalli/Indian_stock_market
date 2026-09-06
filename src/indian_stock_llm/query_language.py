@@ -77,6 +77,8 @@ _TELUGU_PHRASES: tuple[tuple[str, str], ...] = (
     ("\u0c27\u0c30", "price"),
     ("\u0c0e\u0c02\u0c24\u0c41\u0c02\u0c26\u0c3f", "how much"),
     ("\u0c0e\u0c02\u0c24", "how much"),
+    ("\u0c28\u0c3f\u0c2b\u0c4d\u0c1f\u0c40", "NIFTY"),
+    ("\u0c38\u0c46\u0c28\u0c4d\u0c38\u0c46\u0c15\u0c4d\u0c38\u0c4d", "SENSEX"),
 )
 
 _TENGLISH_PHRASES: tuple[tuple[str, str], ...] = (
@@ -121,6 +123,7 @@ _TENGLISH_PHRASES: tuple[tuple[str, str], ...] = (
     (r"\bpolika\b", "compare"),
     (r"\banchana\b", "predict"),
     (r"\bnamaskaram\b", "hello"),
+    (r"\bela\s+unnav\b", "hello"),
 )
 
 _HINGLISH = {
@@ -159,6 +162,11 @@ _HEADER_TE = (
     (r"\*\*Quick math:\*\*", "**\u0c32\u0c46\u0c15\u0c4d\u0c15:**"),
     (r"\*\*For \(setup\):\*\*", "**\u0c05\u0c28\u0c41\u0c15\u0c42\u0c32\u0c02:**"),
     (r"\*\*Against:\*\*", "**\u0c2a\u0c4d\u0c30\u0c24\u0c3f\u0c15\u0c42\u0c32\u0c02:**"),
+    (r"\*\*Overall:\*\*", "**\u0c2e\u0c4a\u0c24\u0c4d\u0c24\u0c02:**"),
+    (r"\*\*Read:\*\*", "**\u0c35\u0c3f\u0c35\u0c30\u0c02:**"),
+    (r"\*\*What is driving the mood:\*\*", "**\u0c2e\u0c42\u0c21\u0c4d \u0c0e\u0c02\u0c26\u0c41\u0c15\u0c41:**"),
+    (r"\*\*News sentences:\*\*", "**\u0c35\u0c3e\u0c30\u0c4d\u0c24\u0c32\u0c41:**"),
+    (r"\*\*Comparison scorecard \(educational\)\*\*", "**\u0c2a\u0c4b\u0c32\u0c3f\u0c15 (\u0c35\u0c3f\u0c26\u0c4d\u0c2f\u0c3e):**"),
 )
 
 _TE_GREETING_RE = re.compile(

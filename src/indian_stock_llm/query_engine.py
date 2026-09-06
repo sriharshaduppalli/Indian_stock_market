@@ -722,7 +722,30 @@ class StockMarketAssistant:
                     routed.lower(),
                 )
             )
-            if not wants_live_indicator and not stock_specific_metric and not wants_numeric_calc:
+            live_profile = False
+            try:
+                from .query_contract import resolve_query_contract
+
+                live_profile = resolve_query_contract(routed).profile in {
+                    "quote",
+                    "news",
+                    "sentiment",
+                    "technical",
+                    "trade_plan",
+                    "prediction",
+                    "fundamentals",
+                    "stock_analysis",
+                    "risks",
+                    "compare",
+                }
+            except Exception:
+                live_profile = False
+            if (
+                not live_profile
+                and not wants_live_indicator
+                and not stock_specific_metric
+                and not wants_numeric_calc
+            ):
                 education = get_education_answer(routed)
         except Exception:
             education = None
