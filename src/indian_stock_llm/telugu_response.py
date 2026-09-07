@@ -120,19 +120,30 @@ _BODY_TE: tuple[tuple[str, str], ...] = (
         "\u0c38\u0c4d\u0c35\u0c32\u0c4d\u0c2a\u0c15\u0c3e\u0c32\u0c02 bias \u2014 F&O tip \u0c15\u0c3e\u0c26\u0c41.",
     ),
     ("\u2022 Last\u2248", "\u2022 \u0c1a\u0c3f\u0c35\u0c30\u0c3f\u2248"),
-    (" | Trend\u2248", " | trend\u2248"),
+    (" | Trend\u2248", " | \u0c27\u0c4b\u0c30\u0c23\u0c3f\u2248"),
+    ("Trend\u2248", "\u0c27\u0c4b\u0c30\u0c23\u0c3f\u2248"),
     (" | RSI\u2248", " | RSI\u2248"),
     ("\u2022 Support\u2248", "\u2022 \u0c38\u0c2a\u0c4b\u0c30\u0c4d\u0c1f\u0c4d\u2248"),
     (" | Resistance\u2248", " | \u0c30\u0c46\u0c38\u0c3f\u0c38\u0c4d\u0c1f\u0c46\u0c28\u0c4d\u0c38\u0c4d\u2248"),
     (" | Resistance:", " | \u0c30\u0c46\u0c38\u0c3f\u0c38\u0c4d\u0c1f\u0c46\u0c28\u0c4d\u0c38\u0c4d:"),
     ("_Educational \u2014 confirm with live NSE quotes before trading._",
      "_\u0c35\u0c3f\u0c26\u0c4d\u0c2f\u0c3e \u2014 live NSE/BSE\u0c24\u0c4b \u0c38\u0c30\u0c3f\u0c2a\u0c3e\u0c26\u0c3f\u0c1a\u0c3e\u0c32\u0c3f._"),
-    ("\u2022 MACD bias\u2248None", "\u2022 MACD: n/a"),
-    ("trend\u2248bearish", "trend\u2248\u0c2c\u0c47\u0c30\u0c3f\u0c37\u0c4d"),
-    ("trend\u2248bullish", "trend\u2248\u0c2c\u0c41\u0c32\u0c3f\u0c37\u0c4d"),
-    ("trend\u2248neutral", "trend\u2248\u0c24\u0c1f\u0c38\u0c4d\u0c25\u0c02"),
+    ("\u2022 MACD bias\u2248None", "\u2022 MACD \u0c32\u0c47\u0c26\u0c41"),
+    ("MACD bias\u2248None", "MACD \u0c32\u0c47\u0c26\u0c41"),
+    ("MACD: n/a", "MACD \u0c32\u0c47\u0c26\u0c41"),
+    ("trend\u2248bearish", "\u0c27\u0c4b\u0c30\u0c23\u0c3f\u2248\u0c2c\u0c47\u0c30\u0c3f\u0c37\u0c4d"),
+    ("trend\u2248bullish", "\u0c27\u0c4b\u0c30\u0c23\u0c3f\u2248\u0c2c\u0c41\u0c32\u0c3f\u0c37\u0c4d"),
+    ("trend\u2248neutral", "\u0c27\u0c4b\u0c30\u0c23\u0c3f\u2248\u0c24\u0c1f\u0c38\u0c4d\u0c25\u0c02"),
+    ("\u0c27\u0c4b\u0c30\u0c23\u0c3f\u2248bearish", "\u0c27\u0c4b\u0c30\u0c23\u0c3f\u2248\u0c2c\u0c47\u0c30\u0c3f\u0c37\u0c4d"),
+    ("\u0c27\u0c4b\u0c30\u0c23\u0c3f\u2248bullish", "\u0c27\u0c4b\u0c30\u0c23\u0c3f\u2248\u0c2c\u0c41\u0c32\u0c3f\u0c37\u0c4d"),
+    ("\u0c27\u0c4b\u0c30\u0c23\u0c3f\u2248neutral", "\u0c27\u0c4b\u0c30\u0c23\u0c3f\u2248\u0c24\u0c1f\u0c38\u0c4d\u0c25\u0c02"),
     ("RSI\u2248", "RSI\u2248"),
-    (" (neutral)", " (neutral)"),
+    (" (neutral)", " (\u0c24\u0c1f\u0c38\u0c4d\u0c25\u0c02)"),
+    (" (bullish)", " (\u0c2c\u0c41\u0c32\u0c3f\u0c37\u0c4d)"),
+    (" (bearish)", " (\u0c2c\u0c47\u0c30\u0c3f\u0c37\u0c4d)"),
+    (" \u2014 neutral", " \u2014 \u0c24\u0c1f\u0c38\u0c4d\u0c25\u0c02"),
+    (" F&O tip \u0c15\u0c3e\u0c26\u0c41", " F&O \u0c38\u0c32\u0c39\u0c3e \u0c15\u0c3e\u0c26\u0c41"),
+    ("\u0c38\u0c4d\u0c35\u0c32\u0c4d\u0c2a\u0c15\u0c3e\u0c32\u0c02 bias", "\u0c38\u0c4d\u0c35\u0c32\u0c4d\u0c2a\u0c15\u0c3e\u0c32\u0c02 \u0c27\u0c4b\u0c30\u0c23\u0c3f"),
     (" \u2014 paper-practice view", " \u2014 \u0c2a\u0c47\u0c2a\u0c30\u0c4d \u0c2a\u0c4d\u0c30\u0c3e\u0c15\u0c4d\u0c1f\u0c40\u0c38\u0c4d"),
     (" \u2014 quantitative stack", " \u2014 \u0c15\u0c4d\u0c35\u0c3e\u0c02\u0c1f\u0c4d \u0c38\u0c4d\u0c1f\u0c3e\u0c15\u0c4d"),
     (" \u2014 momentum check", " \u2014 momentum check"),
@@ -510,12 +521,17 @@ _STANCE_LINE_RE = (
     r".{0,80}?\b(ACCUMULATE|BUY|SELL|HOLD|WAIT|TRIM|AVOID)\b"
 )
 _FALSE_BUY_RE = re.compile(
-    r"(?i)paper buy plan|should i buy|buy/sell|buy plan|buy \?",
+    r"(?i)paper (buy|sell) plan|should i (buy|sell)|buy/sell|buy plan|sell plan|buy \?|sell \?",
 )
+_LEAD_LINE_RE = re.compile(
+    rf"^\*\*{re.escape(_LOCALIZED_MARK)}:\*\*[^\n]*\n+",
+)
+_DROP_ASK_RE = re.compile(r"(?im)^\*\*(?:Your ask|\u0c2e\u0c40 \u0c2a\u0c4d\u0c30\u0c36\u0c4d\u0c28):\*\*.*\n?")
 
 
 def _stance_from_answer(answer: str) -> str | None:
-    text = answer or ""
+    text = _LEAD_LINE_RE.sub("", answer or "", count=1)
+    text = _DROP_ASK_RE.sub("", text)
     match = re.search(_STANCE_LINE_RE, text, flags=re.I | re.S)
     if match:
         return match.group(1).upper()
@@ -555,9 +571,6 @@ def _extract_numeric_lines(answer: str) -> str:
         if len(kept) >= 6:
             break
     return "\n".join(kept)
-
-
-_DROP_ASK_RE = re.compile(r"(?im)^\*\*(?:Your ask|\u0c2e\u0c40 \u0c2a\u0c4d\u0c30\u0c36\u0c4d\u0c28):\*\*.*\n?")
 
 
 def _drop_internal_ask(answer: str) -> str:
@@ -626,7 +639,7 @@ def render_telugu_answer(query: str, answer: str) -> str:
     if not answer:
         return answer
     if _already_localized(answer):
-        return answer
+        return apply_telugu_leftovers(_drop_internal_ask(answer))
     literacy = telugu_literacy_answer(query)
     if literacy:
         extras = _extract_numeric_lines(answer)
