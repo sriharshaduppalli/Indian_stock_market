@@ -258,9 +258,26 @@ def _history_turns(history: Sequence[Mapping[str, Any]] | None) -> list[Mapping[
     return [turn for turn in list(history) if isinstance(turn, Mapping) and str(turn.get("content") or "").strip()]
 
 
+def _is_definitional_topic(query: str) -> bool:
+    """True when the user is asking what a term means, not about a ticker."""
+    q = (query or "").strip()
+    if not q:
+        return False
+    if re.search(
+        r"\b(what is|what are|define|definition|meaning of|explain|how to|"
+        r"how does|how do i|difference between|formula|equation|teach)\b",
+        q,
+        flags=re.IGNORECASE,
+    ):
+        return True
+    return ("అంటే" in q) or ("ఏమిటి" in q)
+
+
 def should_inherit_symbol(profile: str, query: str, named_in_query: bool) -> bool:
     """Screen / last-stock context must not steal index, literacy, or greetings."""
     if (profile or "") in _PROFILES_NO_INHERIT_SYMBOL:
+        return False
+    if _is_definitional_topic(query) and not named_in_query:
         return False
     if named_in_query:
         return True
@@ -332,6 +349,35 @@ def _symbol_candidates(query: str) -> list[str]:
             continue
         found.append(token)
     return list(dict.fromkeys(found))
+
+
+def _prior_compare_pair(history: Sequence[Mapping[str, Any]] | None) -> tuple[str, str] | None:
+    """Last turn that named two stocks — used for “both” after a compare."""
+    turns = _history_turns(history)[-8:]
+    for prefer_user in (True, False):
+        for turn in reversed(turns):
+            role = str(turn.get("role") or "").lower()
+            if prefer_user and role != "user":
+                continue
+            if not prefer_user and role == "user":
+                continue
+            cands = _symbol_candidates(str(turn.get("content") or ""))
+            if len(cands) >= 2:
+                return cands[0], cands[1]
+    return None
+
+
+def _is_named_compare(query: str, candidates: Sequence[str], profile: str = "") -> bool:
+    if (profile or "") == "compare" and len(candidates) >= 2:
+        return True
+    if len(candidates) < 2:
+        return False
+    return bool(
+        re.search(
+            r"\b(compare|vs|versus|against|with|or|ya)\b",
+            (query or "").lower(),
+        )
+    )
 
 
 def _prior_symbol(history: Sequence[Mapping[str, Any]] | None) -> str | None:
@@ -733,6 +779,7 @@ def detect_profile(query: str, intent_hint: str = "") -> tuple[str, int, str]:
         and not definitional
         and re.search(
             r"\b(how(?:'s| is) .{0,28}(doing|looking|performing|trading)|"
+            r"how(?:'s| is) it|how(?:'s| is)\s+[a-z0-9.&-]{2,15}|"
             r"tell me about|long[- ]term view|\boutlook\b|"
             r"kya haal|kaise hai)|"
             r"\babout [a-z0-9.&-]{2,15}\b",
@@ -798,11 +845,37 @@ def rewrite_followup(
     q = original.lower().strip()
     followish = bool(
         re.search(
-            r"^(what about|how about|and |also |same |yes\b|ok\b|why\?|simplify|"
-            r"tell me more|what next)",
+            r"^(what about|how about|and |also |aur |same |yes\b|ok\b|why\?|simplify|"
+            r"tell me more|what next|both\b|this one|this stock|that one|that stock|"
+            r"how is this|how about this)",
+            q,
+        )
+        or re.search(
+            r"\b(this one|this stock|that one|that stock|ee stock|ee scrip)\b",
             q,
         )
     )
+    pair = _prior_compare_pair(history)
+    if pair and (
+        re.search(
+            r"^(both|both of (them|those)|compare both|those two|all (two|of them)|"
+            r"rendu|donu|dono|idddarini)\b",
+            q,
+        )
+        or "\u0c30\u0c46\u0c02\u0c21\u0c41" in (query or "")
+    ):
+        return f"Compare {pair[0]} and {pair[1]}", True, pair[0], prior_profile or "compare"
+    if pair and re.search(
+        r"\b(which is cheaper|which is better|cheaper one|better one|which one)\b",
+        q,
+    ):
+        kind = "cheaper" if "cheap" in q else "better"
+        return (
+            f"Which is {kind}, {pair[0]} or {pair[1]}?",
+            True,
+            pair[0],
+            "compare",
+        )
     if not prior_symbol and screen_symbol and followish:
         prior_symbol = screen_symbol
     current = _symbol_candidates(original)
@@ -816,6 +889,14 @@ def rewrite_followup(
             return expanded, True, prior_symbol, prior_profile
     except Exception:
         pass
+    anchor = prior_symbol or screen_symbol
+    if anchor and re.fullmatch(
+        r"(how much|kitna|kitna hai|entha|dhara|price)\??",
+        q.strip(),
+    ):
+        return f"What is the price of {anchor}?", True, anchor, "quote"
+    if anchor and re.fullmatch(r"(the )?(levels?|entry|stop|target)\??", q.strip()):
+        return f"Practice levels for {anchor}", True, anchor, "technical"
     same_for = re.search(
         r"\b(same|do the same|apply that|repeat that)\s+(for|on|to)\s+([A-Za-z0-9.&-]{2,15})\b",
         q,
@@ -868,15 +949,27 @@ def rewrite_followup(
         }
         return mapping.get(topic, f"{topic} of {prior_symbol}"), True, prior_symbol, prior_profile
 
-    if re.search(r"\b(it|that stock|this stock|the same stock|its)\b", q) and len(q.split()) <= 14:
+    if re.search(
+        r"\b(it|that stock|this stock|this one|that one|the same stock|its|ee stock|ee scrip)\b",
+        q,
+    ) and len(q.split()) <= 14:
         rewritten = re.sub(
-            r"\b(that stock|this stock|the same stock|it|its)\b",
+            r"\b(that stock|this stock|this one|that one|the same stock|ee stock|ee scrip|it|its)\b",
             prior_symbol,
             original,
             flags=re.I,
             count=1,
         )
         return rewritten, True, prior_symbol, prior_profile
+
+    # "what is RSI?" / "how to start SIP" is a new literacy topic, not RSI of
+    # the last ticker. Only append a prior symbol for short follow-ups.
+    try:
+        profile_now, _, _ = detect_profile(original)
+    except Exception:
+        profile_now = ""
+    if (profile_now in _PROFILES_NO_INHERIT_SYMBOL) or _is_definitional_topic(original):
+        return original, False, prior_symbol, prior_profile
 
     if len(q.split()) <= 6 and re.search(
         r"\b(sentiment|news|price|rsi|technical|fundamental|overvalued|predict|forecast)\b",
@@ -1002,6 +1095,11 @@ def build_clarifier(
         names = ", ".join(slots.ambiguous_names[:4])
         if tools:
             return tools["clarifier"]("ambiguous", names)
+        if language == "hi-en":
+            return (
+                f"Ye naam ek se zyada company pe match karta hai ({names}). "
+                "Kaunsa symbol chahiye?"
+            )
         return (
             f"That name matches more than one listed company ({names}). "
             "Which symbol do you want?"
@@ -1009,6 +1107,11 @@ def build_clarifier(
     if "symbol" in slots.missing:
         if tools:
             return tools["clarifier"]("symbol")
+        if language == "hi-en":
+            return (
+                "Kaunsa NSE/BSE symbol? Quote, news, technicals, valuation, "
+                "compare, paper buy/sell, ya forecast?"
+            )
         if style == "concise":
             return (
                 "Which NSE/BSE symbol? And do you want a quote, news, technicals, "
@@ -1061,13 +1164,25 @@ def resolve_query_contract(
         profile, confidence, _xf_used = apply_transformer_route(profile, confidence, xf)
     except Exception:
         xf = None
+    if re.search(
+        r"\b(why this paper stance|explain the\b.{0,48}\bsnapshot|in simple words)\b",
+        (resolved or "").lower(),
+    ):
+        # A short follow-up must not be reclassified as the market primer
+        # or folded back into the previous full card.
+        profile = "stock_analysis"
+        confidence = max(int(confidence or 0), 80)
     if (
         is_follow_up
         and prior_profile
         and prior_profile not in {"small_talk"}
         and profile == "stock_analysis"
         and confidence < 70
-        and not re.search(r"\b(analyze|analysis|about|outlook|how is)\b", resolved.lower())
+        and not re.search(
+            r"\b(analyze|analysis|about|outlook|how is|explain the|in simple words|"
+            r"why this paper stance)\b",
+            resolved.lower(),
+        )
     ):
         profile = prior_profile
         confidence = max(confidence, 78)
@@ -1092,7 +1207,13 @@ def resolve_query_contract(
         symbol = named[0] if named else None
 
     ambiguous: tuple[str, ...] = ()
-    if len(candidates) > 1 and len(cleaned.split()) <= 4:
+    # Two named stocks in a compare ("Compare HDFCBANK with ICICIBANK") are
+    # a pair, not one company name that collided with another listing.
+    if (
+        len(candidates) > 1
+        and len(cleaned.split()) <= 4
+        and not _is_named_compare(cleaned, candidates, profile)
+    ):
         ambiguous = tuple(candidates[:5])
 
     missing: list[str] = []
@@ -1126,9 +1247,22 @@ def resolve_query_contract(
         "sentiment",
         "technical",
         "news",
+        "prediction",
     }:
-        profile = "quote"
-        needs_symbol = True
+        priceish = bool(
+            re.search(
+                r"\b(price|ltp|quote|kitna|how much|trading at|dhara|entha|cmp)\b",
+                low,
+            )
+        )
+        if priceish:
+            profile = "quote"
+            needs_symbol = True
+        else:
+            # "Nifty ela undi?" / "how is Nifty" is outlook, not an empty LTP card.
+            profile = "prediction"
+            needs_symbol = False
+            symbol = None
     if (
         needs_symbol
         and not symbol

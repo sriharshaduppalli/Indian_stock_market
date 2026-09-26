@@ -46,7 +46,7 @@ INTENT_KEYWORDS = {
     },
     "market_literacy": {
         "beginner", "basics", "meaning", "participants", "depository", "nsdl", "cdsl",
-        "kyc", "mistakes", "rumour", "rumor", "how", "works", "work", "guide",
+        "kyc", "mistakes", "rumour", "rumor", "works", "work", "guide",
         "primary", "secondary", "shareholder", "marketplace", "trader", "investor",
         "scalper", "swing", "holding", "cagr", "absolute", "varsity", "opinions",
         "candlestick", "marubozu", "doji", "hammer", "engulfing", "fibonacci",
@@ -415,7 +415,32 @@ class StockMarketAssistant:
             from .query_contract import resolve_query_contract
 
             contract = resolve_query_contract(query)
-            if int(contract.confidence or 0) >= 62 and contract.ism_intent:
+            live_profiles = {
+                "quote",
+                "news",
+                "sentiment",
+                "technical",
+                "trade_plan",
+                "prediction",
+                "fundamentals",
+                "risks",
+                "stock_analysis",
+                "compare",
+                "corporate_actions",
+            }
+            # "How is RELIANCE?" is a live snapshot even when the keyword
+            # score is only the word "how". Do not let that fall through
+            # to the market-primer intent.
+            if contract.ism_intent and (
+                int(contract.confidence or 0) >= 62
+                or (
+                    contract.profile in live_profiles
+                    and (
+                        contract.slots.symbol
+                        or contract.profile in {"prediction", "compare", "quote"}
+                    )
+                )
+            ):
                 return contract.ism_intent
         except Exception:
             pass
@@ -1251,9 +1276,10 @@ class StockMarketAssistant:
         safety_metrics = self.safety_policy.audit_summary()
         answer = response.answer
         try:
-            from .query_language import localize_assistant_answer
+            from .query_language import localize_assistant_answer, polish_hinglish_answer
 
             answer = localize_assistant_answer(query, answer)
+            answer = polish_hinglish_answer(query, answer)
         except Exception:
             answer = response.answer
         return {

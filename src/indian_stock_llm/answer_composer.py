@@ -434,12 +434,113 @@ def _cagr_card(query: str) -> str | None:
 
 def _ask_line(query: str) -> str | None:
     """Echo a short user ask so the first screen matches their question."""
-    text = re.sub(r"\s+", " ", (query or "").strip())
+    try:
+        from .query_language import display_user_ask
+
+        text = display_user_ask(query)
+    except Exception:
+        text = re.sub(r"\s+", " ", (query or "").strip())
     if not text or len(text) > 90:
         return None
     if text.lower().startswith("user_query:"):
         return None
     return f"**Your ask:** {text}"
+
+
+def _is_short_followup(query: str) -> bool:
+    """why / simplify / explain-the-snapshot should not reprint the previous card."""
+    q = (query or "").lower()
+    return bool(
+        re.search(
+            r"\b(why this paper stance|explain the\b.{0,40}\bsnapshot|in simple words)\b",
+            q,
+        )
+    )
+
+
+def _short_followup_card(
+    *,
+    symbol: str,
+    query: str,
+    price: Any,
+    tech: dict[str, Any],
+    support: Any,
+    resistance: Any,
+) -> str:
+    stance, rationale, _score = _stance_from_tech(tech, {})
+    rationale = _plain_reason(rationale)
+    lines = [
+        f"**{symbol} — in short**",
+    ]
+    ask = _ask_line(query)
+    if ask:
+        lines.append(ask)
+    lines.extend(
+        [
+            "",
+            f"**Direct answer:** {stance}",
+            f"**Why:** {rationale}",
+            f"• Last: ₹{_fmt(price)}",
+        ]
+    )
+    if _num(support) is not None or _num(resistance) is not None:
+        lines.append(f"• Support / Resistance: {_fmt(support)} / {_fmt(resistance)}")
+    lines.extend(
+        [
+            "",
+            "Short read for paper practice — not a new buy or sell call.",
+            "_Educational only — not investment advice._",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _headline_about_symbol(title: str, symbol: str, company: str = "") -> bool:
+    """Keep a headline only when it is about this listing, not a lookalike name."""
+    text = re.sub(r"\s+", " ", (title or "")).strip()
+    if not text:
+        return False
+    low = text.lower()
+    if re.search(
+        r"\b(bitcoin|crypto|litecoin|chainlink|ethereum|dogecoin|solana)\b",
+        low,
+    ):
+        return False
+    foreign_listing = bool(re.search(r"\((?:nyse|nasdaq|amex):", low))
+    india_listing = bool(re.search(r"\b(nse|bse|india|nifty)\b", low))
+    if foreign_listing and not india_listing:
+        return False
+    sym = (symbol or "").strip().lower()
+    needles: list[str] = []
+    if sym:
+        needles.append(sym)
+    company_l = re.sub(r"\s+", " ", (company or "").lower()).strip()
+    if company_l:
+        needles.append(company_l)
+        core = re.sub(r"\b(ltd|limited|inc|corporation|corp)\b\.?", "", company_l).strip()
+        if len(core) >= 4:
+            needles.append(core)
+    needles.extend(
+        {
+            "infy": ("infosys",),
+            "tcs": ("tata consultancy",),
+            "hdfcbank": ("hdfc bank",),
+            "sbin": ("state bank of india", "sbi"),
+            "reliance": ("reliance industries",),
+            "icicibank": ("icici bank",),
+            "hcltech": ("hcl technologies",),
+            "itc": ("itc",),
+        }.get(sym, ())
+    )
+    for needle in needles:
+        if not needle:
+            continue
+        if " " in needle:
+            if needle in low:
+                return True
+        elif re.search(rf"\b{re.escape(needle)}\b", low):
+            return True
+    return False
 
 
 def compose_structured_answer(
@@ -461,7 +562,7 @@ def compose_structured_answer(
         profile=profile,
     )
     threaded = _with_compound_followthrough(answer, query, market_context, profile)
-    return _with_conversation_voice(threaded, market_context, profile)
+    return _with_conversation_voice(threaded, market_context, profile, query=query)
 
 
 def _compact_secondary_block(
@@ -542,6 +643,7 @@ def _with_conversation_voice(
     answer: str | None,
     market_context: dict[str, Any] | None,
     profile: str | None,
+    query: str = "",
 ) -> str | None:
     if not answer:
         return answer
@@ -555,6 +657,7 @@ def _with_conversation_voice(
             symbol=str(ctx.get("symbol") or convo.get("prior_symbol") or "").upper() or None,
             profile=profile or str(convo.get("prior_profile") or "") or None,
             sentiment=ctx.get("user_sentiment") if isinstance(ctx.get("user_sentiment"), dict) else None,
+            query=query or str(convo.get("query") or ""),
         )
     except Exception:
         lead = None
@@ -666,12 +769,42 @@ def _compose_structured_answer_impl(
     p0 = ctx.get("p0_math") if isinstance(ctx.get("p0_math"), dict) else {}
 
     # ── Beginner market literacy (no symbol required) ───────────────
-    if (profile or "") == "literacy" or intent == "market_literacy" or re.search(
-        r"\b(how does the (stock|share) market work|how the (stock|share) market works|"
-        r"stock market meaning|key participants|depository participant|"
-        r"how (are |do )?share prices|price discovery|how to start investing|"
-        r"common mistakes|primary market|secondary market)\b",
-        q,
+    literacy_phrase = bool(
+        re.search(
+            r"\b(how does the (stock|share) market work|how the (stock|share) market works|"
+            r"stock market meaning|key participants|depository participant|"
+            r"how (are |do )?share prices|price discovery|how to start investing|"
+            r"common mistakes|primary market|secondary market)\b",
+            q,
+        )
+    )
+    named_on_query = False
+    try:
+        from .symbol_linker import link_symbols
+
+        named_on_query = any(
+            s not in {"NIFTY", "SENSEX", "NIFTY50", "BANKNIFTY"}
+            for s in link_symbols(query)
+        )
+    except Exception:
+        named_on_query = bool(symbol)
+    live_profile = (profile or "") in {
+        "quote",
+        "news",
+        "sentiment",
+        "technical",
+        "trade_plan",
+        "prediction",
+        "fundamentals",
+        "risks",
+        "stock_analysis",
+        "compare",
+    }
+    # "RELIANCE ela undi?" / "How is this one?" must not become the IPO primer
+    # just because the word "how" scored as market literacy.
+    if (
+        ((profile or "") == "literacy" or intent == "market_literacy" or literacy_phrase)
+        and not ((live_profile or named_on_query or bool(symbol)) and not literacy_phrase)
     ):
         try:
             from app.market_education import get_education_answer
@@ -871,45 +1004,66 @@ def _compose_structured_answer_impl(
         or (re.search(r"\b(?:better\s+)?[a-z][a-z0-9.&-]{1,11}\s+or\s+[a-z][a-z0-9.&-]{1,11}\b", q) and compare_named)
     ):
         # Only scorecard legs the user named — drop holdings/context leaks.
-        mentioned: set[str] = set()
+        named_ordered: list[str] = []
         try:
-            from app.stock_enricher import extract_all_symbols_from_query
+            from .query_contract import _symbol_candidates
 
-            mentioned = {
-                str(s).upper()
-                for s in (extract_all_symbols_from_query(query) or [])
-                if s
-            }
+            named_ordered = [str(s).upper() for s in (_symbol_candidates(query) or []) if s]
         except Exception:
-            mentioned = set()
+            named_ordered = []
+        if not named_ordered:
+            try:
+                from app.stock_enricher import extract_all_symbols_from_query
+
+                named_ordered = [
+                    str(s).upper()
+                    for s in (extract_all_symbols_from_query(query) or [])
+                    if s
+                ]
+            except Exception:
+                named_ordered = []
+        mentioned = set(named_ordered)
         if symbol:
             mentioned.add(symbol)
+            if symbol not in named_ordered:
+                named_ordered.insert(0, symbol)
 
-        rows = []
+        by_sym: dict[str, dict[str, Any]] = {}
         if symbol and (not mentioned or symbol in mentioned):
-            rows.append(
-                {
-                    "symbol": symbol,
-                    "price": price,
-                    "technical": tech,
-                    "fundamental": fund,
-                }
-            )
+            by_sym[symbol] = {
+                "symbol": symbol,
+                "price": price,
+                "technical": tech,
+                "fundamental": fund,
+            }
         for peer in peers:
             if not isinstance(peer, dict):
                 continue
             psym = str(peer.get("symbol") or "").upper()
-            if not psym or psym == symbol:
+            if not psym:
                 continue
             if mentioned and psym not in mentioned:
                 continue
+            by_sym[psym] = {
+                "symbol": psym,
+                "price": peer.get("current_price"),
+                "technical": normalize_market_context(peer).get("technical"),
+                "fundamental": normalize_market_context(peer).get("fundamental"),
+            }
+
+        legs = named_ordered[:3] or list(by_sym.keys())
+        rows = []
+        for name in legs:
             rows.append(
-                {
-                    "symbol": psym,
-                    "price": peer.get("current_price"),
-                    "technical": normalize_market_context(peer).get("technical"),
-                    "fundamental": normalize_market_context(peer).get("fundamental"),
-                }
+                by_sym.get(
+                    name,
+                    {
+                        "symbol": name,
+                        "price": None,
+                        "technical": {},
+                        "fundamental": {},
+                    },
+                )
             )
 
         parts = ["**Comparison scorecard (educational)**", ""]
@@ -932,6 +1086,25 @@ def _compose_structured_answer_impl(
                     f"{_fmt(f.get('pb') or f.get('p/b'))} | {_fmt(f.get('roe'))} | "
                     f"{f.get('market_cap') or 'n/a'} | {note} |"
                 )
+            if "cheaper" in q or "better" in q:
+                priced = [
+                    (str(row.get("symbol") or ""), _num(row.get("price")))
+                    for row in rows[:3]
+                ]
+                priced = [(name, px) for name, px in priced if name and px is not None]
+                if "cheaper" in q and len(priced) >= 2:
+                    winner = min(priced, key=lambda item: item[1])
+                    parts.append("")
+                    parts.append(
+                        f"**On last price:** {winner[0]} is lower "
+                        f"(₹{_fmt(winner[1])}). That is not a valuation call."
+                    )
+                elif "cheaper" in q:
+                    parts.append("")
+                    parts.append(
+                        "Both names are on the card. A last price is missing, "
+                        "so this is not a cheaper call."
+                    )
             # Per-name fundamental bullets (second-name depth).
             parts.append("")
             parts.append("**Fundamental detail**")
@@ -1482,6 +1655,19 @@ def _compose_structured_answer_impl(
             "events_news",
             "market_calculations",
         }
+        or (profile or "") in {
+            "quote",
+            "news",
+            "sentiment",
+            "technical",
+            "trade_plan",
+            "prediction",
+            "fundamentals",
+            "risks",
+            "stock_analysis",
+            "compare",
+            "corporate_actions",
+        }
         or stop_loss_ask
         or re.search(r"\b(should i buy|should i sell|buy or sell|trade plan|swing trade)\b", q)
     ):
@@ -1503,6 +1689,15 @@ def _compose_structured_answer_impl(
         stop = plan.get("stop") or levels.get("stop_loss")
         take = plan.get("target_1") or levels.get("take_profit")
         pct = ctx.get("pct_change") or ctx.get("pctChange") or tech.get("pct_change")
+        if _is_short_followup(query):
+            return _short_followup_card(
+                symbol=symbol,
+                query=query,
+                price=price,
+                tech=tech if isinstance(tech, dict) else {},
+                support=support,
+                resistance=resistance,
+            )
 
         def _append_news_block(parts: list[str], *, max_heads: int = 4) -> None:
             news_heads = list(ctx.get("news_headlines") or [])
@@ -1519,6 +1714,18 @@ def _compose_structured_answer_impl(
             tagged = list((sentiment_pack.get("news") or {}).get("tagged") or [])
             if not tagged:
                 tagged = list(sentiment.get("tagged") or [])
+            company_name = str(ctx.get("company_name") or "")
+            news_heads = [
+                h
+                for h in news_heads
+                if _headline_about_symbol(str(h), symbol, company_name)
+            ]
+            tagged = [
+                t
+                for t in tagged
+                if isinstance(t, dict)
+                and _headline_about_symbol(str(t.get("title") or ""), symbol, company_name)
+            ]
             sector_trend = sentiment.get("sector_trend")
             if not (news_heads or tagged or sector_trend):
                 return
@@ -1569,16 +1776,29 @@ def _compose_structured_answer_impl(
             parts = [_named_title(header_base, query, "quote", "live quote")]
             if ask_line:
                 parts.append(ask_line)
+            open_px = ctx.get("open") or tech.get("open")
+            high_px = ctx.get("high") or tech.get("high") or levels.get("day_high")
+            low_px = ctx.get("low") or tech.get("low") or levels.get("day_low")
+            prev_px = ctx.get("prev_close") or ctx.get("previousClose") or tech.get("prev_close")
+            volume = ctx.get("volume") or tech.get("volume")
             parts.extend([
                 "",
                 f"• Last: ₹{_fmt(price)}"
                 + (f" ({_fmt(pct)}%)" if _num(pct) is not None else ""),
-                f"• Open / High / Low: {_fmt(ctx.get('open') or tech.get('open'))} / "
-                f"{_fmt(ctx.get('high') or tech.get('high') or levels.get('day_high'))} / "
-                f"{_fmt(ctx.get('low') or tech.get('low') or levels.get('day_low'))}",
-                f"• Prev close: {_fmt(ctx.get('prev_close') or ctx.get('previousClose') or tech.get('prev_close'))}",
-                f"• Volume: {ctx.get('volume') or tech.get('volume') or 'n/a'}",
-                f"• Support / Resistance: {_fmt(support)} / {_fmt(resistance)}",
+            ])
+            if any(_num(v) is not None for v in (open_px, high_px, low_px)):
+                parts.append(
+                    f"• Open / High / Low: {_fmt(open_px)} / {_fmt(high_px)} / {_fmt(low_px)}"
+                )
+            if _num(prev_px) is not None:
+                parts.append(f"• Prev close: {_fmt(prev_px)}")
+            if volume not in (None, "", 0, "0", "n/a"):
+                parts.append(f"• Volume: {volume}")
+            if _num(support) is not None or _num(resistance) is not None:
+                parts.append(
+                    f"• Support / Resistance: {_fmt(support)} / {_fmt(resistance)}"
+                )
+            parts.extend([
                 "",
                 "Ask for technicals, news, valuation, or a paper trade plan if you need more depth.",
                 "_Live quote snapshot — educational only._",
@@ -1666,9 +1886,17 @@ def _compose_structured_answer_impl(
                     if tech.get("rsi_interpretation")
                     else ""
                 ),
-                f"• Supertrend: {tech.get('supertrend') or (p0.get('supertrend') or {}).get('direction') or 'n/a'}"
-                f" | MACD hist: {_fmt(tech.get('macd_hist') or (p0.get('macd') or {}).get('histogram'))}",
-                f"• Support: {_fmt(support)} | Resistance: {_fmt(resistance)}",
+            ])
+            st_dir = tech.get("supertrend") or (p0.get("supertrend") or {}).get("direction")
+            macd_h = tech.get("macd_hist") or (p0.get("macd") or {}).get("histogram")
+            if st_dir or _num(macd_h) is not None:
+                parts.append(
+                    f"• Supertrend: {st_dir or 'n/a'} | MACD hist: {_fmt(macd_h)}"
+                )
+            parts.extend([
+                f"• Support: {_fmt(support)} | Resistance: {_fmt(resistance)}"
+                if _num(support) is not None or _num(resistance) is not None
+                else "• No live support or resistance in the current tape.",
                 f"• Stop idea: {_fmt(stop)} | Target idea: {_fmt(take)}",
             ])
             parts.extend(
@@ -1776,9 +2004,12 @@ def _compose_structured_answer_impl(
                 [
                     "",
                     how,
-                    f"• Support / Resistance: {_fmt(support)} / {_fmt(resistance)}",
                 ]
             )
+            if _num(support) is not None or _num(resistance) is not None:
+                parts.append(
+                    f"• Support / Resistance: {_fmt(support)} / {_fmt(resistance)}"
+                )
             if fund.get("pe") not in (None, "", "n/a"):
                 parts.append(f"• Valuation cue: P/E {_fmt(fund.get('pe'))}")
             _append_news_block(parts, max_heads=2)

@@ -95,6 +95,13 @@ def run_ism_agent(
             context_lines=[],
             profile=contract.profile,
         ) or (contract.clarifier or "")
+        try:
+            from .query_language import localize_assistant_answer, polish_hinglish_answer
+
+            answer = localize_assistant_answer(query, answer)
+            answer = polish_hinglish_answer(query, answer)
+        except Exception:
+            pass
     return {
         "answer": answer,
         "profile": contract.profile,

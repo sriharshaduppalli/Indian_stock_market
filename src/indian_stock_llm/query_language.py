@@ -131,10 +131,15 @@ _HINGLISH = {
     "kharido": "buy",
     "kharidna": "buy",
     "kharidne": "buy",
+    "kharidun": "buy",
+    "kharidunga": "buy",
+    "kharidunqa": "buy",
     "bech": "sell",
     "becho": "sell",
     "bechna": "sell",
     "bechne": "sell",
+    "bechdu": "sell",
+    "bechdun": "sell",
     "kitna": "how much",
     "kaise": "how",
     "kya": "what",
@@ -197,7 +202,16 @@ def detect_query_language(query: str) -> str:
     low = raw.lower()
     if any(re.search(pat, low) for pat, _ in _TENGLISH_PHRASES):
         return "te-en"
-    if re.search(r"\b(kharid|bech|kitna|kaise|kya hai|chahiye)\b", low):
+    # Roman Telugu greetings and "both" follow-ups. Script is not required.
+    if re.fullmatch(r"(namaste|namaskar|namaskaram)[.!?]*", low.strip()):
+        return "te-en"
+    if re.search(r"\b(rendu|donu|idddarini)\b", low):
+        return "te-en"
+    if re.search(
+        r"\b(kharid(?:o|na|ne|un|unga|unqa)?|bech(?:o|na|ne|du|dun)?|"
+        r"kitna|kaise|kya(?:\s+hai|\s+main)?|chahiye|hai\s+kya)\b",
+        low,
+    ):
         return "hi-en"
     return "en"
 
@@ -260,9 +274,26 @@ def normalize_user_query(query: str) -> str:
         mapped = _HINGLISH.get(token.lower())
         if not mapped:
             return token
+        # A second pass must not turn "bech sell" into "bech sell sell".
+        tail = text[match.end() :]
+        if re.match(r"\s+" + re.escape(mapped) + r"\b", tail, flags=re.I):
+            return token
         return f"{token} {mapped}"
 
     text = re.sub(pattern, _hi, text, flags=re.I)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def display_user_ask(query: str) -> str:
+    """User's words for the echo line, without routing glosses stacked beside them."""
+    text = re.sub(r"\s+", " ", (query or "").strip())
+    for word, gloss in sorted(_HINGLISH.items(), key=lambda item: -len(item[1])):
+        text = re.sub(
+            rf"\b{re.escape(word)}\s+{re.escape(gloss)}\b",
+            word,
+            text,
+            flags=re.I,
+        )
     return re.sub(r"\s+", " ", text).strip()
 
 
@@ -286,15 +317,17 @@ def learning_query_fields(query: str) -> dict[str, str | bool]:
 
 
 def _stance_from_answer(answer: str) -> str | None:
-    head = (answer or "")[:500]
-    match = re.search(
-        r"\b(ACCUMULATE|BUY|SELL|HOLD|WAIT|TRIM|AVOID)\b",
-        head,
-        flags=re.I,
-    )
-    if not match:
-        return None
-    return match.group(1).upper()
+    head = (answer or "")[:800]
+    for pat in (
+        r"\*\*Direct answer:\*\*\s*(ACCUMULATE|BUY|SELL|HOLD|WAIT|TRIM|AVOID)",
+        r"\*\*Action:\*\*\s*(ACCUMULATE|BUY|SELL|HOLD|WAIT|TRIM|AVOID)",
+        r"\b(ACCUMULATE|HOLD|WAIT|TRIM|AVOID)\b",
+        r"\b(BUY|SELL)\b",
+    ):
+        match = re.search(pat, head, flags=re.I)
+        if match:
+            return match.group(1).upper()
+    return None
 
 
 def localize_assistant_answer(query: str, answer: str) -> str:
@@ -349,3 +382,30 @@ def telugu_clarifier(kind: str, names: str = "") -> str:
         "\u0c2a\u0c4b\u0c32\u0c3f\u0c15, \u0c15\u0c4a\u0c28\u0c3e\u0c32\u0c3e/\u0c05\u0c2e\u0c4d\u0c2e\u0c3e\u0c32\u0c3e, "
         "\u0c32\u0c47\u0c26\u0c3e \u0c05\u0c02\u0c1a\u0c28\u0c3e \u2014 \u0c0f\u0c26\u0c3f \u0c15\u0c3e\u0c35\u0c3e\u0c32\u0c4b \u0c1a\u0c46\u0c2a\u0c4d\u0c2a\u0c02\u0c21\u0c3f."
     )
+
+
+def polish_hinglish_answer(query: str, answer: str) -> str:
+    """One Roman-Hindi lead on hi-en asks. Body stays the English card."""
+    if not answer or detect_query_language(query) != "hi-en":
+        return answer
+    if answer.startswith("**Seedha jawab:**") or answer.startswith("**Paper plan:**"):
+        return answer
+    stance = _stance_from_answer(answer)
+    price = re.search(
+        r"(?:Last|last price)[:\s]*₹?\s*(\d[\d,]*(?:\.\d+)?)",
+        answer,
+        flags=re.I,
+    )
+    session = bool(re.search(r"NSE\s*/\s*BSE session|\*\*[^*]*session", answer, flags=re.I))
+    if stance:
+        lead = (
+            f"**Paper plan:** {stance} — yeh tip nahi hai, sirf paper practice. "
+            "Neeche English card hai.\n\n"
+        )
+    elif session:
+        lead = "**Session:** market ka status neeche hai.\n\n"
+    elif price:
+        lead = f"**Seedha jawab:** abhi ₹{price.group(1)} pe hai. Neeche tape hai.\n\n"
+    else:
+        return answer
+    return lead + answer

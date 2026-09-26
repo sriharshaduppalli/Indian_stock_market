@@ -613,6 +613,12 @@ def apply_telugu_leftovers(text: str) -> str:
             out = out.replace(src, dest)
     out = re.sub(r"only\._", "._", out)
     out = re.sub(r"call\._", "._", out)
+    out = _DROP_ASK_RE.sub("", out)
+    out = re.sub(
+        r"(?im)^[•\-\*]\s*(?:Open / High / Low|\u0c13\u0c2a\u0c46\u0c28\u0c4d / \u0c39\u0c48 / \u0c32\u0c4b):\s*n/a.*\n?",
+        "",
+        out,
+    )
     return out
 
 

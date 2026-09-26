@@ -61,12 +61,20 @@ _LEVEL = re.compile(
     re.I,
 )
 _OTHER = re.compile(
-    r"^(and|what about|how about|also)\s+([A-Za-z0-9.&-]{2,15})\??$",
+    r"^(and|what about|how about|also|aur)\s+([A-Za-z0-9.&-]{2,15})\??$",
     re.I,
 )
 
 
 def detect_small_talk(query: str) -> str | None:
+    try:
+        from .query_language import telugu_small_talk_kind
+
+        te_kind = telugu_small_talk_kind(query)
+        if te_kind:
+            return te_kind
+    except Exception:
+        pass
     q = re.sub(r"[^a-z0-9\s]", " ", (query or "").lower())
     q = re.sub(r"\s+", " ", q).strip()
     if not q:
@@ -132,6 +140,10 @@ def expand_conversational_followup(
             return f"Why is {prior_symbol} moving?"
         return f"Explain the {prior_symbol} snapshot"
     if _MORE.match(q):
+        # "Tell me more" after a last-price card should open the snapshot,
+        # not print the same quote again.
+        if prior_profile in {"quote", None, ""}:
+            return f"How is {prior_symbol} doing?"
         return _shaped(prior_profile, prior_symbol)
     if _SIMPLE.match(q):
         return f"Explain {prior_symbol} in simple words"
@@ -165,10 +177,18 @@ def conversational_lead(
     symbol: str | None,
     profile: str | None,
     sentiment: Mapping[str, Any] | None = None,
+    query: str = "",
 ) -> str | None:
     """One spoken line before the card, only on real follow-ups."""
     if not follow_up:
         return None
+    try:
+        from .query_language import is_telugu_query
+
+        if is_telugu_query(query):
+            return None
+    except Exception:
+        pass
     tone = str((sentiment or {}).get("emotion") or "neutral")
     name = (symbol or "").upper()
     if tone in {"frustrated", "anxious"}:

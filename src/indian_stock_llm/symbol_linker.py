@@ -32,6 +32,8 @@ _ALIASES: dict[str, str] = {
     "hdfcbank": "HDFCBANK",
     "icici bank": "ICICIBANK",
     "icicibank": "ICICIBANK",
+    "icicbank": "ICICIBANK",
+    "icici": "ICICIBANK",
     "sbi": "SBIN",
     "state bank": "SBIN",
     "state bank of india": "SBIN",
