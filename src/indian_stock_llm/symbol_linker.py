@@ -70,6 +70,21 @@ _ALIASES: dict[str, str] = {
 
 _TOKEN_RE = re.compile(r"[a-z0-9&.]+")
 
+# Market vocabulary that sits one letter away from a listed name. "delivery"
+# must stay the settlement word, not DELHIVERY; "future" is not FUTURE ENT.
+_VOCAB = frozenset(
+    {
+        "delivery", "intraday", "option", "options", "future", "futures",
+        "margin", "dividend", "bonus", "split", "equity", "index", "trading",
+        "trade", "order", "limit", "market", "stop", "loss", "target", "sip",
+        "mutual", "fund", "funds", "etf", "gold", "silver", "bond", "bonds",
+        "swing", "scalp", "position", "positional", "broker", "demat",
+        "settlement", "premium", "strike", "expiry", "lot", "lots", "call",
+        "put", "straddle", "strangle", "spread", "hedge", "volume", "price",
+        "explain", "meaning", "difference", "versus", "between",
+    }
+)
+
 
 def _fuzzy_one(phrase: str, choices: Iterable[str], cutoff: float = 0.86) -> str | None:
     phrase = (phrase or "").strip().lower()
@@ -143,6 +158,8 @@ def link_symbols(query: str) -> list[str]:
                 seen.add(sym)
                 continue
         if len(phrase) < 5:
+            continue
+        if all(word in _VOCAB for word in phrase.split()):
             continue
         near = _fuzzy_one(phrase, table.keys())
         if not near:
