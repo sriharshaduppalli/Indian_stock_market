@@ -195,10 +195,12 @@ def has_telugu_script(query: str) -> bool:
 
 
 def detect_query_language(query: str) -> str:
-    """Return te | te-en | hi-en | en."""
+    """Return te | te-en | hi | hi-en | en."""
     raw = _strip_wrappers(query)
     if has_telugu_script(raw):
         return "te"
+    if re.search(r"[\u0900-\u097F]", raw or ""):
+        return "hi"
     low = raw.lower()
     if any(re.search(pat, low) for pat, _ in _TENGLISH_PHRASES):
         return "te-en"
@@ -385,11 +387,13 @@ def telugu_clarifier(kind: str, names: str = "") -> str:
 
 
 def polish_hinglish_answer(query: str, answer: str) -> str:
-    """One Roman-Hindi lead on hi-en asks. Body stays the English card."""
-    if not answer or detect_query_language(query) != "hi-en":
+    """Roman-Hindi or Devanagari asks keep the same figures, with Hindi labels."""
+    language = detect_query_language(query)
+    if not answer or language not in {"hi", "hi-en"}:
         return answer
     if answer.startswith("**Seedha jawab:**") or answer.startswith("**Paper plan:**"):
-        return answer
+        labeled = _hinglish_labels(answer)
+        return labeled
     stance = _stance_from_answer(answer)
     price = re.search(
         r"(?:Last|last price)[:\s]*₹?\s*(\d[\d,]*(?:\.\d+)?)",
@@ -400,12 +404,40 @@ def polish_hinglish_answer(query: str, answer: str) -> str:
     if stance:
         lead = (
             f"**Paper plan:** {stance} — yeh tip nahi hai, sirf paper practice. "
-            "Neeche English card hai.\n\n"
+            "Neeche Hindi labels hain.\n\n"
         )
     elif session:
         lead = "**Session:** market ka status neeche hai.\n\n"
     elif price:
         lead = f"**Seedha jawab:** abhi ₹{price.group(1)} pe hai. Neeche tape hai.\n\n"
     else:
-        return answer
-    return lead + answer
+        lead = "**Seedha jawab:** neeche wahi figures hain. Yeh tip nahi hai.\n\n"
+    return lead + _hinglish_labels(answer)
+
+
+_HINGLISH_LABELS = (
+    ("**Technical readout:**", "**Technical:**"),
+    ("**Direct answer:**", "**Seedha jawab:**"),
+    ("**Why:**", "**Kyun:**"),
+    ("**Action:**", "**Paper action:**"),
+    ("_Educational only — not investment advice._", "_Yeh padhai hai. Tip nahi, aur research-analyst call nahi._"),
+    ("_Educational snapshot — not a buy/sell call._", "_Yeh snapshot padhai ka hai. Buy ya sell call nahi._"),
+    ("_One indicator — not a buy or sell plan._", "_Ek indicator hai. Buy ya sell plan nahi._"),
+    (
+        "_Educational calculation from recent market history — not investment advice._",
+        "_Yeh recent history se padhai ka number hai. Tip nahi, research-analyst call nahi._",
+    ),
+    ("one indicator is not a trade plan.", "ek indicator trade plan nahi hai."),
+    ("_Paper study only. The print is delayed._", "_Paper study hai. Print delayed hai._"),
+    ("_Paper study only. This is not a live order book._", "_Paper study hai. Yeh live order book nahi hai._"),
+    ("Grey-market premium is not in this list.", "Grey-market premium is list mein nahi hai."),
+    ("The print is delayed.", "Print delayed hai."),
+    ("Exit load, expense ratio, star rating, and 1Y/3Y/5Y returns are not in this NAV row.", "Exit load, expense ratio, star rating, aur 1Y/3Y/5Y returns is NAV row mein nahi hain."),
+)
+
+
+def _hinglish_labels(answer: str) -> str:
+    text = answer
+    for src, dst in _HINGLISH_LABELS:
+        text = text.replace(src, dst)
+    return text

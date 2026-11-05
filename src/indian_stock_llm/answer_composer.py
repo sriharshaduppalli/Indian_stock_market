@@ -562,7 +562,23 @@ def compose_structured_answer(
         profile=profile,
     )
     threaded = _with_compound_followthrough(answer, query, market_context, profile)
-    return _with_conversation_voice(threaded, market_context, profile, query=query)
+    voiced = _with_conversation_voice(threaded, market_context, profile, query=query)
+    return _with_desk_footnote(voiced, market_context)
+
+
+def _with_desk_footnote(answer: str | None, market_context: dict[str, Any] | None) -> str | None:
+    if not answer:
+        return answer
+    ctx = normalize_market_context(market_context)
+    try:
+        from app.ism_desk import render_desk_footnote
+
+        note = render_desk_footnote(ctx.get("desk") if isinstance(ctx.get("desk"), dict) else None)
+    except Exception:
+        note = ""
+    if not note or note in answer:
+        return answer
+    return f"{answer.rstrip()}\n\n{note}"
 
 
 def _compact_secondary_block(
@@ -756,6 +772,16 @@ def _compose_structured_answer_impl(
             return format_corporate_actions_card(query, symbol or "", rows=dated)
         except Exception:
             pass
+
+    try:
+        from app.ism_desk import render_desk_answer
+
+        desk_card = render_desk_answer(query, ctx.get("desk") if isinstance(ctx.get("desk"), dict) else None)
+        if desk_card:
+            return desk_card
+    except Exception:
+        pass
+
     tech = ctx.get("technical") or {}
     fund = ctx.get("fundamental") or {}
     levels = ctx.get("trading_levels") or {}
@@ -1873,6 +1899,33 @@ def _compose_structured_answer_impl(
             return "\n".join(parts)
 
         if profile == "technical":
+            asked = (query or "").lower()
+            single_indicator = bool(
+                re.search(r"\b(rsi|macd|pe ratio|p/e|p\/e|vwap|atr|supertrend|bollinger)\b", asked)
+            ) and not re.search(r"\b(buy|sell|plan|should i|trade|entry|stop)\b", asked)
+            if single_indicator:
+                bits = [f"**{symbol or 'This symbol'} · indicator**", ""]
+                if re.search(r"\brsi\b", asked):
+                    bits.append(
+                        f"• RSI: {_fmt(tech.get('rsi'))}"
+                        + (f" — {tech.get('rsi_interpretation')}" if tech.get("rsi_interpretation") else "")
+                    )
+                if re.search(r"\bmacd\b", asked):
+                    bits.append(f"• MACD hist: {_fmt(tech.get('macd_hist') or (p0.get('macd') or {}).get('histogram'))}")
+                if re.search(r"\b(pe ratio|p/e|p\/e)\b", asked):
+                    bits.append(f"• P/E: {_fmt(fund.get('pe'))}")
+                if re.search(r"\bvwap\b", asked):
+                    bits.append(f"• VWAP: {_fmt(tech.get('vwap'))}")
+                if re.search(r"\batr\b", asked):
+                    bits.append(f"• ATR: {_fmt(tech.get('atr'))}")
+                if re.search(r"\bsupertrend\b", asked):
+                    bits.append(f"• Supertrend: {tech.get('supertrend') or (p0.get('supertrend') or {}).get('direction') or 'n/a'}")
+                if re.search(r"\bbollinger\b", asked):
+                    bits.append(f"• Bollinger: {_fmt(tech.get('bb_lower'))} / {_fmt(tech.get('bb_upper'))}")
+                if len(bits) == 2:
+                    bits.append("• That indicator is not in the current pack.")
+                bits.extend(["", f"Last: ₹{_fmt(price)}. The print is delayed.", "_One indicator — not a buy or sell plan._"])
+                return "\n".join(bits)
             parts = [_named_title(header_base, query, "technical", "technical analysis")]
             if ask_line:
                 parts.append(ask_line)

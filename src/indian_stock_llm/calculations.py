@@ -617,6 +617,13 @@ class PandasTaIndicatorCalculator:
         period_match = re.search(r"(?:period|window|length)\s*(\d+)", query_lower)
         if period_match:
             return max(2, int(period_match.group(1)))
+        # "50 EMA" puts the length before the name. "EMA 50" puts it after.
+        leading = re.search(
+            r"\b(\d{1,3})\s*(?:day|period|length)?\s*(?:rsi|sma|ema|dma|atr|adx)\b",
+            query_lower,
+        )
+        if leading:
+            return max(2, int(leading.group(1)))
         indicator_match = re.search(r"(?:rsi|sma|ema|bbands?|atr|adx)\s*(\d+)", query_lower)
         if indicator_match:
             return max(2, int(indicator_match.group(1)))

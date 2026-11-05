@@ -708,12 +708,34 @@ class StockMarketAssistant:
         self.learning_manager.record_anonymized_feedback(query=query, intent=intent)
 
         # Prefer deterministic education pack for definitions / equations.
-        # Skip when the user asks for a live indicator on a named symbol.
+        # Skip when the user asks for a live indicator on a named symbol,
+        # or for a desk figure (chain, IPO list, journal, drawn line).
         education = None
         try:
+            from app.ism_desk import build_chat_desk, detect_desk_focus
             from app.market_education import get_education_answer
 
             routed = learn_query or query
+            existing = (market_context or {}).get("desk") if isinstance(market_context, dict) else None
+            existing_focus = str(existing.get("focus") or "") if isinstance(existing, dict) else ""
+            desk_focus = detect_desk_focus(query) or detect_desk_focus(routed) or existing_focus
+            if desk_focus:
+                existing = (market_context or {}).get("desk") if isinstance(market_context, dict) else None
+                if not (isinstance(existing, dict) and existing.get("focus")):
+                    screen = (market_context or {}).get("screen_context") if isinstance(market_context, dict) else None
+                    symbol = str((market_context or {}).get("symbol") or "") if isinstance(market_context, dict) else ""
+                    user_id = (market_context or {}).get("user_id") if isinstance(market_context, dict) else None
+                    built = build_chat_desk(
+                        query or routed,
+                        symbol=symbol,
+                        screen=screen if isinstance(screen, dict) else None,
+                        user_id=int(user_id) if isinstance(user_id, int) else None,
+                    )
+                    if built:
+                        market_context = dict(market_context or {})
+                        market_context["desk"] = built
+            else:
+                desk_focus = ""
             wants_live_indicator = (
                 PandasTaIndicatorCalculator.indicator_requested(routed)
                 and bool(
@@ -766,7 +788,8 @@ class StockMarketAssistant:
             except Exception:
                 live_profile = False
             if (
-                not live_profile
+                not desk_focus
+                and not live_profile
                 and not wants_live_indicator
                 and not stock_specific_metric
                 and not wants_numeric_calc
@@ -1095,6 +1118,9 @@ class StockMarketAssistant:
                             "query_nlu": market_context.get("query_nlu") or {},
                             "conversation": market_context.get("conversation") or {},
                             "portfolio_context": market_context.get("portfolio_context") or {},
+                            "desk": market_context.get("desk") or {},
+                            "session": market_context.get("session") or {},
+                            "corporate_actions": market_context.get("corporate_actions") or [],
                         },
                         ensure_ascii=False,
                     )

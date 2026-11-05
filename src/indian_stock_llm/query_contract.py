@@ -1224,7 +1224,7 @@ def resolve_query_contract(
             r"[\u0c28][\u0c3f][\u0c2b][\u0c4d][\u0c1f][\u0c40]|"
             r"[\u0c38][\u0c46][\u0c28][\u0c4d][\u0c38][\u0c46][\u0c15][\u0c4d][\u0c38][\u0c4d]|"
             r"\u0c2e\u0c3e\u0c30\u0c4d\u0c15\u0c46\u0c1f\u0c4d|"
-            r"(?:today'?s?\s+)?\bmarket\b(?!\s+sentiment)",
+            r"(?:the market|aaj market|market (?:today|now|kaisa|kaisi|open|mood|outlook|bullish|bearish))",
             resolved or cleaned,
             flags=re.IGNORECASE,
         )

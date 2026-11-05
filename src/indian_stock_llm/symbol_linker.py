@@ -81,6 +81,8 @@ _VOCAB = frozenset(
         "swing", "scalp", "position", "positional", "broker", "demat",
         "settlement", "premium", "strike", "expiry", "lot", "lots", "call",
         "put", "straddle", "strangle", "spread", "hedge", "volume", "price",
+        "condor", "iron", "chain", "candle", "candlestick", "grey", "gray",
+        "gmp", "depth", "expense", "ratio", "qwerty",
         "explain", "meaning", "difference", "versus", "between",
     }
 )
