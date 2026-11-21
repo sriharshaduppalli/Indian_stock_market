@@ -190,6 +190,10 @@ _SKIP_TICKERS = frozenset(
         "SPIKE", "PLEDGE", "BONUS", "GOLD", "LUMPSUM", "CONCENTRATION",
         "ANNOUNCEMENT", "CIRCUIT", "UPPER", "LOWER", "TRADERS",
         "KA", "HAAL", "DIP",
+        "VIX", "PCR", "ASM", "GSM", "EBITDA", "PAT", "FCF", "XIRR", "RBI",
+        "NFO", "ELSS", "SWP", "STP", "CPR", "IPO", "GTT", "ASBA", "STCG",
+        "LTCG", "STT", "CNC", "MIS", "NRML", "OFS", "QIB", "HNI", "ADX",
+        "HV", "IV", "OI", "ATM", "ITM", "OTM",
     }
 )
 
@@ -591,16 +595,40 @@ def detect_profile(query: str, intent_hint: str = "") -> tuple[str, int, str]:
     )
     market_term = bool(
         re.search(
-            r"\b(rsi|macd|pe|p/e|cagr|demat|circuit|ipo|option|future|nifty|sensex|"
-            r"stock market|share market|valuation|roe|eps|sma|ema|atr|vwap|"
-            r"bollinger|dividend|stt|ltcg|stcg|fii|dii|"
-            r"bonus|rights issue|stock split|lumpsum|lump sum|"
-            r"straddle|strangle|covered call|brokerage|pledge)\b",
+            r"\b(rsi|macd|pe|p/e|pb|p/b|cagr|demat|circuit|ipo|option|future|nifty|sensex|"
+            r"stock market|share market|valuation|roe|roce|eps|ebitda|pat|fcf|free cash flow|"
+            r"book value|market cap|face value|dividend yield|fair value|promoter pledge|"
+            r"promoter holding|debt to equity|working capital|operating margin|"
+            r"sma|ema|atr|vwap|supertrend|bollinger|fibonacci|pivot|cpr|adx|stochastic|"
+            r"dividend|stt|ltcg|stcg|fii|dii|vix|india vix|pcr|put call ratio|"
+            r"asm|gsm|bulk deal|block deal|repo rate|rbi|sebi|xirr|nav|expense ratio|"
+            r"elss|swp|stp|nfo|etf|sgb|sovereign gold bond|g-?sec|t-?bill|"
+            r"bonus|rights issue|stock split|buyback|delisting|ofs|offer for sale|"
+            r"qib|hni|anchor investor|grey market|lumpsum|lump sum|"
+            r"straddle|strangle|covered call|iron condor|greeks|delta|gamma|theta|vega|"
+            r"open interest|max pain|implied volatility|rollover|lot size|"
+            r"sharpe|drawdown|alpha|beta|brokerage|pledge)\b",
             q,
         )
     )
     if definitional and not has_symbolish and not trade_ask and market_term:
         return "literacy", 90, "definition"
+
+    if (
+        not has_symbolish
+        and not trade_ask
+        and re.search(
+            r"\b(crude oil|brent crude|oil price|repo rate|rbi rate|rate cut|rate hike|"
+            r"rupee depreciation|rupee fall|usdinr|weak rupee|strong rupee|"
+            r"monsoon impact|el nino|la nina|union budget impact|capex impact)\b",
+            q,
+        )
+        and re.search(
+            r"\b(impact|affect|effect|benefi|winner|loser|sector|stocks?|indian market|market)\b",
+            q,
+        )
+    ):
+        return "literacy", 90, "macro transmission"
 
     sectorish = bool(
         re.search(
@@ -653,7 +681,7 @@ def detect_profile(query: str, intent_hint: str = "") -> tuple[str, int, str]:
 
     if intent_l == "fundamentals" or (
         re.search(
-            r"\b(p/?e|pe ratio|valuation|eps|roe|pb|p/b|dividend yield|"
+            r"\b(p/?e|pe ratio|valuation|eps|roe|roce|pb|p/b|dividend yield|"
             r"fundamentals?|overvalued|undervalued|fair value|"
             r"book value|cheap|expensive|costly|promoter pledge|"
             r"market cap|promoter holding|debt of|beta of)\b",
@@ -661,6 +689,8 @@ def detect_profile(query: str, intent_hint: str = "") -> tuple[str, int, str]:
         )
         and not trade_ask
     ):
+        if definitional and not has_symbolish:
+            return "literacy", 90, "fundamental definition"
         return "fundamentals", 88, "valuation"
 
     if has_symbolish and re.search(

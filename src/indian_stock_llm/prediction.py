@@ -241,7 +241,15 @@ class PredictionEngine:
     ) -> dict[str, str]:
         if not isinstance(price, (int, float)) or price <= 0:
             return {}
-        width = atr_val if isinstance(atr_val, (int, float)) and atr_val > 0 else price * 0.012
+        has_atr = isinstance(atr_val, (int, float)) and atr_val > 0
+        has_struct = (
+            isinstance(support, (int, float))
+            and isinstance(resistance, (int, float))
+            and resistance > support > 0
+        )
+        if not has_atr and not has_struct:
+            return {}
+        width = float(atr_val) if has_atr else float(resistance - support) / 3.0  # type: ignore[operator]
         if event_blackout:
             width *= 1.6
         intra = (price - width, price + width)
@@ -296,11 +304,65 @@ class PredictionEngine:
                 key_signals.insert(0, f"Entity context: {entity_label}")
 
         rsi = p0_math.get("wilder_rsi_14") if isinstance(p0_math, dict) else None
+        t_stage = (p0_math.get("trend_stage") or {}) if isinstance(p0_math, dict) else {}
+        comp_perf = (p0_math.get("company_performance") or {}) if isinstance(p0_math, dict) else {}
+        vs_nifty = (p0_math.get("vs_nifty") or {}) if isinstance(p0_math, dict) else {}
+
+        # 1. Intraday horizon: CPR position + short-term RSI extremes
         intra_net = net
+        cpr_pos = str(t_stage.get("cpr_position") or "")
+        if cpr_pos == "above_tc_bullish":
+            intra_net += 0.6
+            ind_notes.append("Price above CPR TC (intraday bullish)")
+        elif cpr_pos == "below_bc_bearish":
+            intra_net -= 0.6
+            ind_notes.append("Price below CPR BC (intraday bearish)")
+        if t_stage.get("narrow_cpr_breakout_alert"):
+            ind_notes.append("Narrow CPR (<0.25%) — high-momentum expansion setup")
         if isinstance(rsi, (int, float)) and rsi >= 68:
             intra_net -= 1.0
+
+        # 2. Swing horizon: trend + momentum + 20d relative strength + volume conviction
         swing_net = net * 0.85
+        adx_v = p0_math.get("adx_approx") if isinstance(p0_math, dict) else None
+        st_dir = (p0_math.get("supertrend") or {}).get("direction") if isinstance(p0_math, dict) else None
+        if isinstance(adx_v, (int, float)) and adx_v >= 25:
+            if st_dir == "bullish":
+                swing_net += 0.5
+            elif st_dir == "bearish":
+                swing_net -= 0.5
+
+        # 3. Medium-term (1-3 months): 50/200 DMA Weinstein Stage + 60d RS + Company Quality Grade
         mt_net = net * 0.55
+        dma_regime = str(t_stage.get("dma_regime") or "")
+        if dma_regime == "golden_cross_bullish":
+            mt_net += 1.0
+            ind_notes.append("Stage 2 uptrend (Price > 50DMA > 200DMA)")
+        elif dma_regime == "pullback_in_uptrend":
+            mt_net += 0.5
+            ind_notes.append("Pullback inside 50/200DMA bull structure")
+        elif dma_regime == "death_cross_bearish":
+            mt_net -= 1.0
+            ind_notes.append("Stage 4 downtrend (Price < 50DMA < 200DMA)")
+        rs60 = vs_nifty.get("rs_60d")
+        if isinstance(rs60, (int, float)):
+            if rs60 >= 1.04:
+                mt_net += 0.5
+            elif rs60 <= 0.96:
+                mt_net -= 0.5
+        perf_grade = str(comp_perf.get("grade") or "")
+        if perf_grade == "strong":
+            mt_net += 0.8
+            ind_notes.append(
+                f"Company quality strong ({comp_perf.get('quality_score')}/{comp_perf.get('quality_checks')})"
+            )
+        elif perf_grade == "healthy":
+            mt_net += 0.4
+        elif perf_grade == "weak":
+            mt_net -= 0.8
+            ind_notes.append(
+                f"Company fundamentals weak ({comp_perf.get('quality_score')}/{comp_perf.get('quality_checks')})"
+            )
 
         price, atr_val, support, resistance = self._price_and_atr(p0_math, resolved_entity)
         event_note = self._event_blackout(p0_math, resolved_entity, context_items)

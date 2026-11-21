@@ -69,18 +69,20 @@ def _sma_last(values: list[float], length: int) -> float:
 
 
 def _rsi_last(closes: list[float], length: int = 14) -> float:
+    """Wilder-smoothed RSI so builtin fallback matches ta/pandas_ta and Android charts."""
     if len(closes) <= length:
         raise ValueError("Not enough prices for RSI")
-    gains = 0.0
-    losses = 0.0
-    for i in range(-length, 0):
-        change = closes[i] - closes[i - 1]
-        if change >= 0:
-            gains += change
-        else:
-            losses -= change
-    avg_gain = gains / length
-    avg_loss = losses / length
+    gains: list[float] = []
+    losses: list[float] = []
+    for i in range(1, len(closes)):
+        change = float(closes[i]) - float(closes[i - 1])
+        gains.append(max(change, 0.0))
+        losses.append(max(-change, 0.0))
+    avg_gain = sum(gains[:length]) / length
+    avg_loss = sum(losses[:length]) / length
+    for i in range(length, len(gains)):
+        avg_gain = (avg_gain * (length - 1) + gains[i]) / length
+        avg_loss = (avg_loss * (length - 1) + losses[i]) / length
     if avg_loss == 0:
         return 100.0
     rs = avg_gain / avg_loss
@@ -88,6 +90,7 @@ def _rsi_last(closes: list[float], length: int = 14) -> float:
 
 
 def _atr_last(highs: list[float], lows: list[float], closes: list[float], length: int = 14) -> float:
+    """Wilder-smoothed ATR so builtin fallback matches analysis_math and stock_enricher."""
     if len(closes) <= length:
         raise ValueError("Not enough bars for ATR")
     trs: list[float] = []
@@ -98,8 +101,10 @@ def _atr_last(highs: list[float], lows: list[float], closes: list[float], length
             abs(lows[i] - closes[i - 1]),
         )
         trs.append(tr)
-    window = trs[-length:]
-    return sum(window) / float(length)
+    atr_val = sum(trs[:length]) / float(length)
+    for tr in trs[length:]:
+        atr_val = (atr_val * (length - 1) + tr) / float(length)
+    return atr_val
 
 
 def _macd_last(closes: list[float]) -> tuple[float, float, float]:

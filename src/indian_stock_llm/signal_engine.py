@@ -207,6 +207,42 @@ def build_trade_plan(pack: dict[str, Any], *, horizon: str = "swing") -> dict[st
     if beta60 is not None and beta60 > 1.4:
         against.append(f"High beta {_fmt(beta60, 2)} vs Nifty — wider swings")
 
+    # 50/200 DMA Trend Stage + CPR + Company Performance Quality
+    t_stage = pack.get("trend_stage") or {}
+    dma_regime = str(t_stage.get("dma_regime") or "")
+    cpr_pos = str(t_stage.get("cpr_position") or "")
+    comp_perf = pack.get("company_performance") or {}
+    perf_grade = str(comp_perf.get("grade") or "")
+    graham_mos = _f(comp_perf.get("graham_margin_of_safety_pct"))
+
+    if dma_regime == "golden_cross_bullish":
+        score += 1
+        reasons.append("Stage 2 uptrend (Price > 50DMA > 200DMA)")
+    elif dma_regime == "pullback_in_uptrend":
+        score += 1
+        reasons.append("Pullback to value zone above 200DMA")
+    elif dma_regime == "death_cross_bearish":
+        score -= 1
+        against.append("Stage 4 downtrend (Price < 50DMA < 200DMA)")
+
+    if cpr_pos == "above_tc_bullish":
+        reasons.append("Trading above Central Pivot Range (TC)")
+    elif cpr_pos == "below_bc_bearish":
+        against.append("Trading below Central Pivot Range (BC)")
+
+    if perf_grade == "strong":
+        score += 1
+        reasons.append(
+            f"Fundamental quality strong ({comp_perf.get('quality_score')}/{comp_perf.get('quality_checks')})"
+        )
+    elif perf_grade == "weak":
+        score -= 1
+        against.append(
+            f"Fundamental quality weak ({comp_perf.get('quality_score')}/{comp_perf.get('quality_checks')})"
+        )
+    if graham_mos is not None and graham_mos >= 15.0:
+        reasons.append(f"Graham Margin of Safety +{graham_mos:.0f}%")
+
     # Horizon tweak
     h = (horizon or "swing").lower()
     if h in {"intraday", "week", "weekly"} and rsi is not None and rsi >= 68:

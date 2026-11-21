@@ -773,18 +773,28 @@ class StockMarketAssistant:
             try:
                 from .query_contract import resolve_query_contract
 
-                live_profile = resolve_query_contract(routed).profile in {
-                    "quote",
-                    "news",
-                    "sentiment",
-                    "technical",
-                    "trade_plan",
-                    "prediction",
-                    "fundamentals",
-                    "stock_analysis",
-                    "risks",
-                    "compare",
-                }
+                contract_check = resolve_query_contract(routed)
+                is_unanchored_fallback = (
+                    contract_check.profile == "stock_analysis"
+                    and contract_check.confidence <= 50
+                    and not contract_check.slots.symbol
+                )
+                live_profile = (
+                    contract_check.profile
+                    in {
+                        "quote",
+                        "news",
+                        "sentiment",
+                        "technical",
+                        "trade_plan",
+                        "prediction",
+                        "fundamentals",
+                        "stock_analysis",
+                        "risks",
+                        "compare",
+                    }
+                    and not is_unanchored_fallback
+                )
             except Exception:
                 live_profile = False
             if (
@@ -794,7 +804,9 @@ class StockMarketAssistant:
                 and not stock_specific_metric
                 and not wants_numeric_calc
             ):
-                education = get_education_answer(routed)
+                from .answer_composer import _macro_transmission_card
+
+                education = _macro_transmission_card(routed) or get_education_answer(routed)
         except Exception:
             education = None
         if education:

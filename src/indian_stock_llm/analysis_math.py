@@ -630,12 +630,28 @@ def _fundamentals_from_yfinance(symbol: str) -> dict[str, Optional[float]]:
             if g is not None and abs(g) <= 2:
                 out[gk] = g * 100.0
         out["book_value"] = _safe_float(info.get("bookValue"))
+        out["pb"] = _safe_float(info.get("priceToBook"))
         out["fifty_two_week_high"] = _safe_float(info.get("fiftyTwoWeekHigh"))
         out["fifty_two_week_low"] = _safe_float(info.get("fiftyTwoWeekLow"))
         dy = _safe_float(info.get("dividendYield") or info.get("trailingAnnualDividendYield"))
         if dy is not None:
             # yfinance may return fraction (0.012) or percent-like (>1)
             out["dividend_yield"] = dy * 100.0 if dy <= 1.5 else dy
+        op_m = _safe_float(info.get("operatingMargins"))
+        if op_m is not None:
+            out["operating_margin_pct"] = op_m * 100.0 if abs(op_m) <= 1.5 else op_m
+        net_m = _safe_float(info.get("profitMargins"))
+        if net_m is not None:
+            out["profit_margin_pct"] = net_m * 100.0 if abs(net_m) <= 1.5 else net_m
+        roa = _safe_float(info.get("returnOnAssets"))
+        if roa is not None:
+            out["roa_pct"] = roa * 100.0 if abs(roa) <= 1.5 else roa
+        de = _safe_float(info.get("debtToEquity"))
+        if de is not None:
+            # yfinance often reports debtToEquity as percentage (e.g. 45.0 = 0.45x)
+            out["debt_to_equity"] = round(de / 100.0, 2) if de > 5.0 else round(de, 2)
+        out["current_ratio"] = _safe_float(info.get("currentRatio"))
+        out["free_cash_flow"] = _safe_float(info.get("freeCashflow"))
     except Exception:
         pass
     return out
@@ -814,6 +830,241 @@ def justified_pe_rough(growth_pct: Optional[float], k: float = 1.0) -> Optional[
     if growth_pct is None or growth_pct <= 0:
         return None
     return k * growth_pct
+
+
+def graham_intrinsic_value(
+    eps: Optional[float],
+    book_value: Optional[float],
+    price: Optional[float] = None,
+) -> dict[str, Optional[float]]:
+    """Benjamin Graham Number = sqrt(22.5 * EPS * BVPS) for profitable positive-book firms."""
+    if eps is None or book_value is None or eps <= 0 or book_value <= 0:
+        return {"graham_number": None, "margin_of_safety_pct": None}
+    graham = math.sqrt(22.5 * float(eps) * float(book_value))
+    mos = None
+    if price is not None and price > 0 and graham > 0:
+        mos = ((graham - float(price)) / graham) * 100.0
+    return {
+        "graham_number": round(graham, 2),
+        "margin_of_safety_pct": round(mos, 1) if mos is not None else None,
+    }
+
+
+def company_performance_scorecard(
+    yf_fund: dict[str, Any],
+    *,
+    price: Optional[float] = None,
+    pe: Optional[float] = None,
+    ev_pack: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    """Institutional 9-point company performance & quality scorecard (Piotroski/DuPont inspired)."""
+    roe = _safe_float(yf_fund.get("roe"))
+    roa = _safe_float(yf_fund.get("roa_pct"))
+    op_margin = _safe_float(yf_fund.get("operating_margin_pct"))
+    net_margin = _safe_float(yf_fund.get("profit_margin_pct"))
+    rev_growth = _safe_float(yf_fund.get("revenue_growth"))
+    earn_growth = _safe_float(yf_fund.get("earnings_growth"))
+    eps = _safe_float(yf_fund.get("eps"))
+    bv = _safe_float(yf_fund.get("book_value"))
+    pb = _safe_float(yf_fund.get("pb"))
+    if pb is None and price and bv and bv > 0:
+        pb = round(float(price) / bv, 2)
+    de = _safe_float(yf_fund.get("debt_to_equity"))
+    cr = _safe_float(yf_fund.get("current_ratio"))
+    fcf = _safe_float(yf_fund.get("free_cash_flow"))
+    mcap = _safe_float(yf_fund.get("market_cap"))
+    net_debt_ebitda = _safe_float((ev_pack or {}).get("net_debt_ebitda"))
+
+    fcf_yield_pct = None
+    if fcf is not None and mcap is not None and mcap > 0:
+        fcf_yield_pct = round((fcf / mcap) * 100.0, 2)
+
+    graham = graham_intrinsic_value(eps, bv, price)
+
+    score = 0
+    max_checks = 0
+    strengths: list[str] = []
+    watchouts: list[str] = []
+
+    if eps is not None:
+        max_checks += 1
+        if eps > 0:
+            score += 1
+            strengths.append(f"Positive trailing EPS (₹{eps:.2f})")
+        else:
+            watchouts.append(f"Negative trailing EPS (₹{eps:.2f})")
+
+    if roe is not None:
+        max_checks += 1
+        if roe >= 15.0:
+            score += 1
+            strengths.append(f"Strong capital efficiency (ROE {roe:.1f}%)")
+        elif roe < 8.0:
+            watchouts.append(f"Sub-par ROE ({roe:.1f}%)")
+
+    if op_margin is not None:
+        max_checks += 1
+        if op_margin >= 12.0:
+            score += 1
+            strengths.append(f"Healthy operating margin ({op_margin:.1f}%)")
+        elif op_margin < 5.0:
+            watchouts.append(f"Thin operating margin ({op_margin:.1f}%)")
+
+    if net_margin is not None:
+        max_checks += 1
+        if net_margin >= 8.0:
+            score += 1
+            strengths.append(f"Solid net profit margin ({net_margin:.1f}%)")
+        elif net_margin <= 0:
+            watchouts.append(f"Loss-making net margin ({net_margin:.1f}%)")
+
+    if rev_growth is not None:
+        max_checks += 1
+        if rev_growth >= 10.0:
+            score += 1
+            strengths.append(f"Double-digit revenue growth ({rev_growth:+.1f}% YoY)")
+        elif rev_growth < 0:
+            watchouts.append(f"Revenue contraction ({rev_growth:+.1f}% YoY)")
+
+    if earn_growth is not None:
+        max_checks += 1
+        if earn_growth >= 10.0:
+            score += 1
+            strengths.append(f"Strong earnings growth ({earn_growth:+.1f}% YoY)")
+        elif earn_growth < 0:
+            watchouts.append(f"Earnings contraction ({earn_growth:+.1f}% YoY)")
+
+    if de is not None:
+        max_checks += 1
+        if de <= 0.8:
+            score += 1
+            strengths.append(f"Conservative leverage (D/E {de:.2f}x)")
+        elif de >= 2.0:
+            watchouts.append(f"Elevated leverage (D/E {de:.2f}x)")
+
+    if cr is not None:
+        max_checks += 1
+        if cr >= 1.2:
+            score += 1
+        elif cr < 1.0:
+            watchouts.append(f"Tight short-term liquidity (Current Ratio {cr:.2f}x)")
+
+    if fcf is not None:
+        max_checks += 1
+        if fcf > 0:
+            score += 1
+            strengths.append("Positive Free Cash Flow generation")
+        else:
+            watchouts.append("Negative Free Cash Flow")
+
+    ratio = (score / max_checks) if max_checks > 0 else None
+    if ratio is None:
+        grade = "insufficient_data"
+    elif ratio >= 0.75:
+        grade = "strong"
+    elif ratio >= 0.50:
+        grade = "healthy"
+    elif ratio >= 0.30:
+        grade = "mixed"
+    else:
+        grade = "weak"
+
+    return {
+        "quality_score": score,
+        "quality_checks": max_checks,
+        "grade": grade,
+        "roe_pct": round(roe, 2) if roe is not None else None,
+        "roa_pct": round(roa, 2) if roa is not None else None,
+        "operating_margin_pct": round(op_margin, 2) if op_margin is not None else None,
+        "profit_margin_pct": round(net_margin, 2) if net_margin is not None else None,
+        "revenue_growth_pct": round(rev_growth, 2) if rev_growth is not None else None,
+        "earnings_growth_pct": round(earn_growth, 2) if earn_growth is not None else None,
+        "debt_to_equity": de,
+        "current_ratio": round(cr, 2) if cr is not None else None,
+        "net_debt_ebitda": round(net_debt_ebitda, 2) if net_debt_ebitda is not None else None,
+        "fcf_yield_pct": fcf_yield_pct,
+        "pb": round(pb, 2) if pb is not None else None,
+        "book_value": round(bv, 2) if bv is not None else None,
+        "graham_number": graham.get("graham_number"),
+        "graham_margin_of_safety_pct": graham.get("margin_of_safety_pct"),
+        "strengths": strengths[:4],
+        "watchouts": watchouts[:4],
+    }
+
+
+def trend_stage_analysis(
+    closes: list[float],
+    cpr: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    """Compute multi-DMA structure (20/50/200 SMA), Weinstein Stage, and Price-vs-CPR regime."""
+    if not closes:
+        return {}
+    price = float(closes[-1])
+    sma20 = sum(closes[-20:]) / 20.0 if len(closes) >= 20 else None
+    sma50 = sum(closes[-50:]) / 50.0 if len(closes) >= 50 else None
+    sma200 = sum(closes[-200:]) / 200.0 if len(closes) >= 200 else None
+
+    # EMA 20
+    ema20 = None
+    if len(closes) >= 20:
+        mult = 2.0 / 21.0
+        ema_v = sum(closes[:20]) / 20.0
+        for c in closes[20:]:
+            ema_v = (float(c) - ema_v) * mult + ema_v
+        ema20 = ema_v
+
+    dma_regime = "neutral"
+    weinstein_stage = "stage_1_basing"
+    if sma50 is not None and sma200 is not None:
+        if price > sma50 > sma200:
+            dma_regime = "golden_cross_bullish"
+            weinstein_stage = "stage_2_advancing"
+        elif sma50 > sma200 and sma200 <= price <= sma50:
+            dma_regime = "pullback_in_uptrend"
+            weinstein_stage = "stage_2_pullback"
+        elif price < sma50 < sma200:
+            dma_regime = "death_cross_bearish"
+            weinstein_stage = "stage_4_declining"
+        elif sma50 < sma200 and price >= sma50:
+            dma_regime = "counter_trend_bounce"
+            weinstein_stage = "stage_1_basing"
+        else:
+            dma_regime = "distribution_transition"
+            weinstein_stage = "stage_3_topping"
+    elif sma20 is not None and sma50 is not None:
+        if price > sma20 > sma50:
+            dma_regime = "short_term_uptrend"
+            weinstein_stage = "stage_2_advancing"
+        elif price < sma20 < sma50:
+            dma_regime = "short_term_downtrend"
+            weinstein_stage = "stage_4_declining"
+
+    cpr_pos = "n/a"
+    narrow_cpr = False
+    if isinstance(cpr, dict) and cpr.get("TC") is not None and cpr.get("BC") is not None:
+        tc = max(float(cpr["TC"]), float(cpr["BC"]))
+        bc = min(float(cpr["TC"]), float(cpr["BC"]))
+        if price > tc:
+            cpr_pos = "above_tc_bullish"
+        elif price < bc:
+            cpr_pos = "below_bc_bearish"
+        else:
+            cpr_pos = "inside_cpr_range"
+        w_pct = _safe_float(cpr.get("width_pct"))
+        if w_pct is not None and w_pct < 0.25:
+            narrow_cpr = True
+
+    return {
+        "sma_20": round(sma20, 2) if sma20 is not None else None,
+        "ema_20": round(ema20, 2) if ema20 is not None else None,
+        "sma_50": round(sma50, 2) if sma50 is not None else None,
+        "sma_200": round(sma200, 2) if sma200 is not None else None,
+        "dist_200dma_pct": round(((price - sma200) / sma200) * 100.0, 2) if sma200 and sma200 > 0 else None,
+        "dma_regime": dma_regime,
+        "weinstein_stage": weinstein_stage,
+        "cpr_position": cpr_pos,
+        "narrow_cpr_breakout_alert": narrow_cpr,
+    }
 
 
 def kelly_fraction(win_rate: float, reward_risk: float) -> float:
@@ -1528,9 +1779,22 @@ def structural_targets(
     """Build T1/T2 from structure (pivots/Fib/BB/ATR), not ATR 1R echo."""
     pivots = pivots or {}
     fib = fib or {}
-    risk = abs(price - stop) if stop and stop < price else (atr_val or price * 0.015) * 1.5
-    # Prefer targets that clear at least ~1.2R when possible.
-    min_t1 = price + max(risk * 1.2, price * 0.012)
+    has_structure = any(
+        _safe_float(x) is not None
+        for x in (
+            stop,
+            atr_val,
+            resistance,
+            bb_upper,
+            pivots.get("R1"),
+            pivots.get("R2"),
+            fib.get("extension_1618"),
+        )
+    )
+    if not has_structure:
+        return {"target_1": None, "target_2": None, "risk_reward_t1": None, "risk_reward_t2": None}
+    risk = abs(price - stop) if stop and stop < price else (atr_val * 1.5 if atr_val and atr_val > 0 else 0.0)
+    min_t1 = price + risk * 1.2 if risk > 0 else price * 1.001
     candidates_t1 = [
         _safe_float(pivots.get("R1")),
         _safe_float(pivots.get("R2")),
@@ -2518,6 +2782,13 @@ def build_p0_analysis_pack(
     )
     mom20 = momentum_roc_pct(closes, 20)
     mom60 = momentum_roc_pct(closes, 60)
+    comp_perf = company_performance_scorecard(
+        yf_fund,
+        price=price,
+        pe=pe,
+        ev_pack=ev_pack,
+    )
+    t_stage = trend_stage_analysis(closes, cpr=cpr)
 
     # Recompute qty from ATR stop (risk budget / |entry−stop|).
     risk_ps = abs(price - stop) if stop else None
@@ -2614,7 +2885,14 @@ def build_p0_analysis_pack(
                 "net_debt_ebitda": round(ev_pack["net_debt_ebitda"], 2)
                 if ev_pack.get("net_debt_ebitda") is not None
                 else None,
+                "pb": comp_perf.get("pb"),
+                "book_value": comp_perf.get("book_value"),
+                "graham_number": comp_perf.get("graham_number"),
+                "graham_margin_of_safety_pct": comp_perf.get("graham_margin_of_safety_pct"),
+                "fcf_yield_pct": comp_perf.get("fcf_yield_pct"),
             },
+            "company_performance": comp_perf,
+            "trend_stage": t_stage,
             "macd": {
                 "macd": round(macd_pack["macd"], 2) if macd_pack.get("macd") is not None else None,
                 "signal": round(macd_pack["signal"], 2) if macd_pack.get("signal") is not None else None,

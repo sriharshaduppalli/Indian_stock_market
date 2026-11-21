@@ -495,6 +495,83 @@ def _short_followup_card(
     return "\n".join(lines)
 
 
+def _macro_transmission_card(query: str) -> str | None:
+    """Deterministic Indian macro-to-sector transmission card."""
+    q = (query or "").lower()
+    if not re.search(
+        r"\b(impact|affect|effect|benefi|winner|loser|sector|stocks?|indian market|market)\b",
+        q,
+    ):
+        return None
+    if re.search(r"\b(crude oil|brent crude|oil price|crude spike|crude fall)\b", q):
+        return (
+            "**Indian Macro Transmission: Brent Crude Oil → NSE Sectors**\n\n"
+            "**Macro Equation:**\n"
+            "India imports ~85% of its crude oil needs. Every +$10/bbl sustained rise in Brent widens the Current Account Deficit (CAD) by ~0.4% of GDP, pressures the INR, and raises raw-material input costs.\n\n"
+            "**Sector Transmission when Crude Rises (inverse when Crude Falls):**\n"
+            "• **Headwinds (Input Cost Margin Compression):**\n"
+            "  - **Paints & Chemicals** (`ASIANPAINT`, `BERGEPAINT`, `PIDILITIND`): Crude derivatives (monomers/solvents/TiO2) are ~50–55% of raw material cost.\n"
+            "  - **Aviation** (`INDIGO`): ATF (Aviation Turbine Fuel) is ~35–40% of operating cost.\n"
+            "  - **Oil Marketing Companies / OMCs** (`BPCL`, `IOC`, `HINDPETRO`): Marketing margins compress when retail pump prices are sticky.\n"
+            "  - **Tyres & FMCG Packaging** (`MRF`, `APOLLOTYRE`, `HINDUNILVR`): Synthetic rubber and packaging resin costs rise.\n"
+            "• **Tailwinds (Realization Expansion):**\n"
+            "  - **Upstream Oil Explorers** (`ONGC`, `OIL`): Higher crude realizations boost EPS (capped if windfall tax/SAED is raised).\n\n"
+            "_Educational macro transmission framework — not a buy/sell recommendation._"
+        )
+    if re.search(r"\b(repo rate|rbi rate|rate cut|rate hike|mpc|interest rate)\b", q):
+        return (
+            "**Indian Macro Transmission: RBI Repo Rate → NSE Sectors**\n\n"
+            "**Macro Equation:**\n"
+            "`WACC & Loan Yield Transmission`: RBI Repo Rate shifts EBLR (External Benchmark Lending Rate) immediately and MCLR with a 1–2 quarter lag.\n\n"
+            "**Sector Transmission on an RBI Rate Cut (inverse on a Rate Hike):**\n"
+            "• **Primary Beneficiaries (Rate-Sensitives):**\n"
+            "  - **Real Estate** (`DLF`, `GODREJPROP`, `OBEROIRLTY`): Lower home-loan EMIs improve affordability and pre-sales velocity.\n"
+            "  - **Auto & 2-Wheelers** (`MARUTI`, `TMPV`, `M&M`, `BAJAJ-AUTO`): ~75% of passenger vehicles are financed; lower EMIs lift showroom conversion.\n"
+            "  - **NBFCs & Wholesale Borrowers** (`BAJFINANCE`, `CHOLAFIN`, `SHRIRAMFIN`): Wholesale borrowing cost drops faster than fixed-rate asset yields, expanding NIMs.\n"
+            "• **Mixed / Near-Term Watchout:**\n"
+            "  - **Large Private & PSU Banks** (`HDFCBANK`, `ICICIBANK`, `SBIN`): EBLR-linked loans reprice down immediately while term deposits reprice with a lag (short-term NIM dip), offset by treasury G-Sec MTM gains.\n\n"
+            "_Educational macro transmission framework — not a buy/sell recommendation._"
+        )
+    if re.search(r"\b(rupee|usdinr|inr depreciation|weak rupee|strong rupee|dollar)\b", q):
+        return (
+            "**Indian Macro Transmission: USD/INR Exchange Rate → NSE Sectors**\n\n"
+            "**Macro Equation:**\n"
+            "`Exporter EBIT Sensitivity`: A 1% INR depreciation vs USD typically adds ~20–35 bps to Indian IT/Pharma operating margins before hedging.\n\n"
+            "**Sector Transmission when INR Depreciates (USD/INR rises):**\n"
+            "• **Tailwinds (USD Revenue Exporters):**\n"
+            "  - **IT Services** (`TCS`, `INFY`, `HCLTECH`, `WIPRO`, `TECHM`): USD/EUR billing translates into higher INR revenue and EBIT.\n"
+            "  - **Export Pharma & Specialty Chemicals** (`SUNPHARMA`, `DRREDDY`, `CIPLA`, `DIVISLAB`): US generics and API exports gain realization lift.\n"
+            "• **Headwinds (Import-Intensive & Unhedged USD Debt):**\n"
+            "  - **Aviation & OMCs** (`INDIGO`, `BPCL`): Dollar-denominated fuel and aircraft lease liabilities become costlier.\n"
+            "  - **Electronics / Solar / Capital Goods Importers**: Imported component landed cost rises.\n\n"
+            "_Educational macro transmission framework — not a buy/sell recommendation._"
+        )
+    if re.search(r"\b(monsoon|el nino|la nina|rural demand)\b", q):
+        return (
+            "**Indian Macro Transmission: Monsoon & Rural Income → NSE Sectors**\n\n"
+            "**Macro Equation:**\n"
+            "Kharif sowing + reservoir levels drive rural wage growth, food inflation (CPI), and rural discretionary spending.\n\n"
+            "**Sector Transmission on Above-Normal Monsoon:**\n"
+            "• **Tailwinds:**\n"
+            "  - **Tractors & Entry 2-Wheelers** (`M&M`, `HEROMOTOCO`, `EICHERMOT`): Farm cashflows directly boost tractor and rural 2W volumes.\n"
+            "  - **FMCG Staples** (`HINDUNILVR`, `ITC`, `DABUR`, `MARICO`): Rural volume growth (~35–40% of staple sales) recovers.\n"
+            "  - **Agri-Inputs & Fertilizers** (`COROMANDEL`, `PIIND`, `UPL`): Higher acreage lifts crop-protection and nutrient demand.\n\n"
+            "_Educational macro transmission framework — not a buy/sell recommendation._"
+        )
+    if re.search(r"\b(union budget|capex|pli|government spending)\b", q):
+        return (
+            "**Indian Macro Transmission: Government Capex & PLI → NSE Sectors**\n\n"
+            "**Macro Equation:**\n"
+            "`Fiscal Multiplier (~2.5x on Capital Outlay)`: Central Budget capex on roads, railways, defence indigenization, and power transmission drives multi-year order-book visibility (`Order Book / TTM Revenue`).\n\n"
+            "**Key NSE Capex & PLI Transmission Channels:**\n"
+            "• **Defence Indigenization:** `HAL`, `BEL`, `MAZDOCK`, `BDL` (driven by DAC AoN approvals and domestic procurement share).\n"
+            "• **EPC, Infra & Capital Goods:** `LT`, `SIEMENS`, `ABB`, `CUMMINSIND` (order inflow + execution working-capital cycle).\n"
+            "• **Power Grid & Utilities:** `NTPC`, `POWERGRID`, `TATAPOWER`, `PFC`, `RECLTD`.\n\n"
+            "_Educational macro transmission framework — not a buy/sell recommendation._"
+        )
+    return None
+
+
 def _headline_about_symbol(title: str, symbol: str, company: str = "") -> bool:
     """Keep a headline only when it is about this listing, not a lookalike name."""
     text = re.sub(r"\s+", " ", (title or "")).strip()
@@ -832,6 +909,9 @@ def _compose_structured_answer_impl(
         ((profile or "") == "literacy" or intent == "market_literacy" or literacy_phrase)
         and not ((live_profile or named_on_query or bool(symbol)) and not literacy_phrase)
     ):
+        macro_card = _macro_transmission_card(query)
+        if macro_card:
+            return macro_card
         try:
             from app.market_education import get_education_answer
 
@@ -1253,6 +1333,28 @@ def _compose_structured_answer_impl(
         ])
         if fund.get("week_52"):
             parts.append(f"• 52-week context: {fund.get('week_52')}")
+        comp_perf = p0.get("company_performance") if isinstance(p0.get("company_performance"), dict) else {}
+        val_math = p0.get("valuation_math") if isinstance(p0.get("valuation_math"), dict) else {}
+        graham_num = comp_perf.get("graham_number") or val_math.get("graham_number")
+        graham_mos = comp_perf.get("graham_margin_of_safety_pct") or val_math.get("graham_margin_of_safety_pct")
+        if graham_num is not None:
+            mos_txt = f" (margin of safety {graham_mos:+.1f}%)" if isinstance(graham_mos, (int, float)) else ""
+            parts.append(f"• Graham intrinsic value: ₹{_fmt(graham_num)}{mos_txt}")
+        if comp_perf.get("grade") and comp_perf.get("grade") != "insufficient_data":
+            parts.append(
+                f"• Company performance grade: **{str(comp_perf.get('grade')).upper()}** "
+                f"({comp_perf.get('quality_score')}/{comp_perf.get('quality_checks')} quality checks)"
+            )
+        op_m = comp_perf.get("operating_margin_pct")
+        net_m = comp_perf.get("profit_margin_pct")
+        de_v = comp_perf.get("debt_to_equity")
+        if any(x is not None for x in (op_m, net_m, de_v)):
+            parts.append(
+                f"• Operating margin: {_fmt(op_m)}% | Net margin: {_fmt(net_m)}% | D/E: {_fmt(de_v)}x"
+            )
+        strengths = list(comp_perf.get("strengths") or [])
+        if strengths:
+            parts.append("• Key strengths: " + "; ".join(str(s) for s in strengths[:3]))
         if re.search(r"\b(cheap|expensive|costly|undervalued|overvalued)\b", q):
             parts.append(
                 "• Cheap/expensive: one multiple is not enough — read P/E vs growth and peers."
@@ -1946,6 +2048,26 @@ def _compose_structured_answer_impl(
                 parts.append(
                     f"• Supertrend: {st_dir or 'n/a'} | MACD hist: {_fmt(macd_h)}"
                 )
+            t_stage = p0.get("trend_stage") if isinstance(p0.get("trend_stage"), dict) else {}
+            cpr_pack = p0.get("cpr") if isinstance(p0.get("cpr"), dict) else {}
+            if t_stage.get("weinstein_stage") or t_stage.get("dma_regime"):
+                parts.append(
+                    f"• Stage / DMA structure: {t_stage.get('weinstein_stage') or 'n/a'} "
+                    f"({t_stage.get('dma_regime') or 'n/a'})"
+                    + (
+                        f" | SMA50 ₹{_fmt(t_stage.get('sma_50'))} / SMA200 ₹{_fmt(t_stage.get('sma_200'))}"
+                        if t_stage.get("sma_50") or t_stage.get("sma_200")
+                        else ""
+                    )
+                )
+            if cpr_pack.get("P") is not None:
+                cpr_line = (
+                    f"• Central Pivot Range (CPR): P ₹{_fmt(cpr_pack.get('P'))} | "
+                    f"TC ₹{_fmt(cpr_pack.get('TC'))} | BC ₹{_fmt(cpr_pack.get('BC'))}"
+                )
+                if t_stage.get("narrow_cpr_breakout_alert"):
+                    cpr_line += " (Narrow CPR <0.25% — expansion alert)"
+                parts.append(cpr_line)
             parts.extend([
                 f"• Support: {_fmt(support)} | Resistance: {_fmt(resistance)}"
                 if _num(support) is not None or _num(resistance) is not None
@@ -1995,12 +2117,22 @@ def _compose_structured_answer_impl(
             if ps.get("intraday"):
                 intra = ps.get("intraday") or {}
                 swing = ps.get("swing") or {}
-                parts.append(
+                mt = ps.get("medium_term") or {}
+                bias_line = (
                     f"• Tape bias (estimate): intraday {intra.get('direction', 'n/a')} "
                     f"(~{float(intra.get('probability') or 0):.0%}) · "
                     f"swing {swing.get('direction', 'n/a')} "
                     f"(~{float(swing.get('probability') or 0):.0%})"
                 )
+                if mt.get("direction"):
+                    bias_line += (
+                        f" · medium-term {mt.get('direction', 'n/a')} "
+                        f"(~{float(mt.get('probability') or 0):.0%})"
+                    )
+                parts.append(bias_line)
+                ks = list(ps.get("key_signals") or [])
+                if ks:
+                    parts.append("• Key drivers: " + "; ".join(str(x) for x in ks[:4]))
             parts.extend(
                 [
                     "",
@@ -2035,6 +2167,28 @@ def _compose_structured_answer_impl(
             ])
             if fund.get("week_52"):
                 parts.append(f"• 52-week context: {fund.get('week_52')}")
+            comp_perf = p0.get("company_performance") if isinstance(p0.get("company_performance"), dict) else {}
+            val_math = p0.get("valuation_math") if isinstance(p0.get("valuation_math"), dict) else {}
+            graham_num = comp_perf.get("graham_number") or val_math.get("graham_number")
+            graham_mos = comp_perf.get("graham_margin_of_safety_pct") or val_math.get("graham_margin_of_safety_pct")
+            if graham_num is not None:
+                mos_txt = f" (margin of safety {graham_mos:+.1f}%)" if isinstance(graham_mos, (int, float)) else ""
+                parts.append(f"• Graham intrinsic value: ₹{_fmt(graham_num)}{mos_txt}")
+            if comp_perf.get("grade") and comp_perf.get("grade") != "insufficient_data":
+                parts.append(
+                    f"• Company performance grade: **{str(comp_perf.get('grade')).upper()}** "
+                    f"({comp_perf.get('quality_score')}/{comp_perf.get('quality_checks')} quality checks)"
+                )
+            op_m = comp_perf.get("operating_margin_pct")
+            net_m = comp_perf.get("profit_margin_pct")
+            de_v = comp_perf.get("debt_to_equity")
+            if any(x is not None for x in (op_m, net_m, de_v)):
+                parts.append(
+                    f"• Operating margin: {_fmt(op_m)}% | Net margin: {_fmt(net_m)}% | D/E: {_fmt(de_v)}x"
+                )
+            strengths = list(comp_perf.get("strengths") or [])
+            if strengths:
+                parts.append("• Key strengths: " + "; ".join(str(s) for s in strengths[:3]))
             parts.extend(
                 [
                     "",

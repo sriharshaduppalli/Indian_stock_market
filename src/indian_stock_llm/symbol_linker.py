@@ -66,6 +66,14 @@ _ALIASES: dict[str, str] = {
     "adani enterprises": "ADANIENT",
     "tech mahindra": "TECHM",
     "yes bank": "YESBANK",
+    "vodafone idea": "IDEA",
+    "idea": "IDEA",
+    "oil india": "OIL",
+    "oil": "OIL",
+    "clean science": "CLEAN",
+    "clean": "CLEAN",
+    "route mobile": "ROUTE",
+    "route": "ROUTE",
 }
 
 _TOKEN_RE = re.compile(r"[a-z0-9&.]+")
@@ -86,6 +94,43 @@ _VOCAB = frozenset(
         "explain", "meaning", "difference", "versus", "between",
     }
 )
+
+# NSE tickers whose lowercase form is an everyday English word. Single-word
+# lowercase matches must not hijack conversational sentences unless typed in
+# ALL CAPS or paired with an explicit stock/company cue.
+_AMBIGUOUS_ENGLISH_TICKERS = frozenset(
+    {
+        "IDEA", "CLEAN", "FACT", "PAGE", "ROUTE", "HOME", "STAR", "CARE",
+        "OIL", "FINE", "MAST", "TEAM", "TIME", "TREE", "DEEP", "SURE",
+        "BEST", "SAFE", "GOLD", "MIND",
+    }
+)
+_STOCK_CONTEXT_RE = re.compile(
+    r"\b(share|shares|stock|stocks|scrip|nse|bse|ltd|limited|price|quote|ltp|cmp|chart|buy|sell|target)\b",
+    re.I,
+)
+
+
+def _allow_ambiguous_ticker(raw_text: str, matched_phrase: str, sym: str) -> bool:
+    if sym not in _AMBIGUOUS_ENGLISH_TICKERS:
+        return True
+    # Multi-word company alias (e.g. "oil india", "vodafone idea", "page industries") is unambiguous.
+    if " " in matched_phrase.strip():
+        return True
+    # Typed in ALL CAPS in the user's raw query (e.g. "Analyze IDEA" or "OIL chart").
+    if re.search(r"(?<![A-Za-z0-9])" + re.escape(sym) + r"(?![A-Za-z0-9])", raw_text):
+        return True
+    low = raw_text.lower()
+    if sym == "OIL" and re.search(r"\b(crude|brent|wti|palm|edible|cooking)\s+oil\b", low):
+        return False
+    tok = re.escape(matched_phrase.strip().lower())
+    # Require the stock/exchange word to be directly adjacent to the ambiguous word
+    # (e.g. "idea share", "clean stock", "nse idea") so "clean breakout on the chart" is not linked.
+    adj_re = (
+        rf"\b(?:{tok}\s+(?:share|shares|stock|stocks|scrip|nse|bse|ltd|limited)"
+        rf"|(?:nse|bse|scrip)\s+{tok})\b"
+    )
+    return bool(re.search(adj_re, low))
 
 
 def _fuzzy_one(phrase: str, choices: Iterable[str], cutoff: float = 0.86) -> str | None:
@@ -138,6 +183,8 @@ def link_symbols(query: str) -> list[str]:
             continue
         if sym in _SKIP or sym in seen:
             continue
+        if not _allow_ambiguous_ticker(text, name, sym):
+            continue
         found.append(sym)
         seen.add(sym)
 
@@ -155,7 +202,7 @@ def link_symbols(query: str) -> list[str]:
     for phrase in sorted(set(windows), key=len, reverse=True):
         if phrase in table:
             sym = table[phrase]
-            if sym not in seen and sym not in _SKIP:
+            if sym not in seen and sym not in _SKIP and _allow_ambiguous_ticker(text, phrase, sym):
                 found.append(sym)
                 seen.add(sym)
                 continue
@@ -167,7 +214,7 @@ def link_symbols(query: str) -> list[str]:
         if not near:
             continue
         sym = table[near]
-        if sym not in seen and sym not in _SKIP:
+        if sym not in seen and sym not in _SKIP and _allow_ambiguous_ticker(text, near, sym):
             found.append(sym)
             seen.add(sym)
     return found
