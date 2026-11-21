@@ -349,6 +349,13 @@ def _symbol_candidates(query: str) -> list[str]:
         token = match.group(1)
         if token in _SKIP_TICKERS:
             continue
+        if token.isdigit():
+            # BSE equity scrip codes are 6 digits starting with 5 (500001-599999).
+            # Plain rupee amounts like 100000 or 250000 in CAGR/SIP prompts are not tickers.
+            if not (len(token) == 6 and token.startswith("5")):
+                continue
+            if re.search(r"\b(cagr|calculate|compute|sip|lumpsum|from\s+\d+\s+to\s+\d+)\b", raw.lower()):
+                continue
         if catalog_check is not None and not catalog_check(token):
             continue
         found.append(token)
